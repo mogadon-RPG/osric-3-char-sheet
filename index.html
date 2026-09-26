@@ -239,6 +239,34 @@
   .io-note { font-size: 0.63rem; color: var(--ink-soft); margin-top: 3px; min-height: 1.2em; }
   .io-note.io-error { color: var(--warn); }
   .io-note.io-ok { color: var(--accent); }
+
+  .save-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .save-item { display: flex; flex-direction: column; min-width: 70px; }
+  .save-item .save-label { font-size: 0.62rem; color: var(--ink-soft); }
+  .save-item .save-value { font-family: "SF Mono", "Courier New", monospace; font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+
+  .gate-note {
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    padding: 2px 0;
+  }
+
+  .fact-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+    font-size: 0.7rem;
+  }
+  .fact-row:first-child { border-top: none; }
+  .fact-row .fact-label { color: var(--ink-soft); }
+  .fact-row .fact-value { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; }
 </style>
 </head>
 <body>
@@ -271,13 +299,22 @@
   </div>
 </details>
 
-<details>
-  <summary>Saving Throws</summary>
+<details open>
+  <summary>Saving Throws <span class="tag" id="savesTag"></span></summary>
   <div class="panel-body">
-    <div class="matrix-scroll">
-      <table class="matrix" id="savesMatrix"></table>
-    </div>
+    <div class="save-card" id="savesCard"></div>
+    <div class="bthb-note" id="savesNote"></div>
   </div>
+</details>
+
+<details id="turningDetails">
+  <summary>Turning the Undead</summary>
+  <div class="panel-body" id="turningBody"></div>
+</details>
+
+<details id="thiefSkillsDetails">
+  <summary>Thief Skills</summary>
+  <div class="panel-body" id="thiefSkillsBody"></div>
 </details>
 
 <details>
@@ -736,6 +773,119 @@
     },
   };
 
+
+  // ---------- OSRIC 3.0 Turning the Undead (Player Guide 1.6.5A) ----------
+  // Columns are cleric levels 1-8, then banded 9-13/14-18/19+, per the book.
+  // Cell values: a number = roll needed (d20) to turn 2d6 of that type;
+  // "T" = turned automatically, no roll; "D" = destroyed/controlled
+  // automatically (2d6 affected); "D*" = as D but 1d6+6 affected; "—" = no
+  // chance at all at this cleric level.
+  const TURN_COLUMNS = [1, 2, 3, 4, 5, 6, 7, 8, "9-13", "14-18", "19+"];
+  const TURNING_TABLE = [
+    { n: 1,  name: "Skeleton", vals: [10, 7, 4, "T", "T", "D", "D", "D*", "D*", "D*", "D*"] },
+    { n: 2,  name: "Zombie",   vals: [13, 10, 7, "T", "T", "D", "D", "D", "D*", "D*", "D*"] },
+    { n: 3,  name: "Ghoul",    vals: [16, 13, 10, 4, "T", "T", "D", "D", "D", "D*", "D*"] },
+    { n: 4,  name: "Shadow",   vals: [19, 16, 13, 7, 4, "T", "T", "D", "D", "D", "D*"] },
+    { n: 5,  name: "Wight",    vals: [20, 19, 16, 10, 7, 4, "T", "T", "D", "D", "D"] },
+    { n: 6,  name: "Ghast",    vals: ["—", 20, 19, 13, 10, 7, 4, "T", "T", "D", "D"] },
+    { n: 7,  name: "Wraith",   vals: ["—", "—", 20, 16, 13, 10, 7, 4, "T", "T", "D"] },
+    { n: 8,  name: "Mummy",    vals: ["—", "—", "—", 19, 16, 13, 10, 7, 4, "T", "D"] },
+    { n: 9,  name: "Spectre",  vals: ["—", "—", "—", 20, 19, 16, 13, 10, 7, "T", "T"] },
+    { n: 10, name: "Vampire",  vals: ["—", "—", "—", "—", 20, 19, 16, 13, 10, 7, 4] },
+    { n: 11, name: "Ghost",    vals: ["—", "—", "—", "—", "—", 20, 19, 16, 13, 10, 7] },
+    { n: 12, name: "Lich",     vals: ["—", "—", "—", "—", "—", "—", 20, 19, 16, 13, 10] },
+    { n: 13, name: "Fiend",    vals: ["—", "—", "—", "—", "—", "—", "—", 20, 19, 16, 13] },
+  ];
+  function turnColumnIndex(clericLevel) {
+    if (clericLevel <= 8) return clericLevel - 1;
+    if (clericLevel <= 13) return 8;
+    if (clericLevel <= 18) return 9;
+    return 10;
+  }
+  // Effective cleric level for turning purposes, or null if this class has
+  // no turning ability at all. Paladins turn as a cleric 2 levels lower
+  // (Player Guide 1.3.8.2, "3rd Level — Turn Undead"), available from
+  // paladin level 3 on; Clerics turn at their own level.
+  function turningClericLevel(className, level) {
+    if (className === "Cleric") return level;
+    if (className === "Paladin") return level - 2 > 0 ? level - 2 : null;
+    return null;
+  }
+
+  // ---------- OSRIC 3.0 Thief Skills (Player Guide 1.3.x.4B) ----------
+  // Percentile skills by level. Thief has the full list; Assassin and Monk
+  // get reduced lists per their own class tables, capped at their own
+  // level ceiling (Assassin 15, Monk 17).
+  const THIEF_SKILLS = {
+    "Thief": {
+      cols: ["Backstab", "Climb", "Hide", "Listen", "Pick Locks", "Pick Pockets", "Read Languages", "Move Quietly", "Traps"],
+      rows: [
+        ["x2, or +1 die", "85%", "10%", "10%", "25%", "30%", "1%", "15%", "20%"],
+        ["x2, or +1 die", "86%", "15%", "10%", "29%", "35%", "5%", "20%", "25%"],
+        ["x2, or +1 die", "87%", "20%", "15%", "33%", "40%", "15%", "27%", "30%"],
+        ["x2, or +1 die", "88%", "25%", "15%", "37%", "45%", "20%", "33%", "35%"],
+        ["x3, or +2 dice", "90%", "30%", "20%", "42%", "50%", "25%", "40%", "40%"],
+        ["x3, or +2 dice", "92%", "35%", "20%", "47%", "55%", "30%", "47%", "45%"],
+        ["x3, or +2 dice", "94%", "42%", "25%", "52%", "60%", "35%", "55%", "50%"],
+        ["x3, or +2 dice", "96%", "48%", "25%", "57%", "65%", "40%", "62%", "55%"],
+        ["x4, or +3 dice", "98%", "55%", "30%", "62%", "70%", "45%", "70%", "60%"],
+        ["x4, or +3 dice", "99%", "65%", "30%", "67%", "80%", "50%", "78%", "65%"],
+        ["x4, or +3 dice", "99%", "70%", "35%", "72%", "90%", "55%", "86%", "70%"],
+        ["x4, or +3 dice", "99%", "75%", "35%", "77%", "100%", "60%", "94%", "75%"],
+        ["x5, or +4 dice", "99%", "85%", "40%", "82%", "105%", "65%", "99%", "80%"],
+        ["x5, or +4 dice", "99%", "95%", "40%", "87%", "110%", "70%", "99%", "85%"],
+        ["x5, or +4 dice", "99%", "99%", "50%", "92%", "115%", "75%", "99%", "90%"],
+        ["x5, or +4 dice", "99%", "99%", "50%", "97%", "125%", "80%", "99%", "95%"],
+        ["x6, or +5 dice", "99%", "99%", "55%", "99%", "125%", "80%", "99%", "99%"],
+        ["x6, or +5 dice", "99%", "99%", "55%", "99%", "125%", "80%", "99%", "99%"],
+        ["x6, or +5 dice", "99%", "99%", "55%", "99%", "125%", "80%", "99%", "99%"],
+        ["x6, or +5 dice", "99%", "99%", "55%", "99%", "125%", "80%", "99%", "99%"],
+      ],
+    },
+    "Assassin": {
+      cols: ["Backstab", "Climb", "Hide", "Listen", "Pick Locks", "Pick Pockets", "Read Languages", "Move Quietly", "Traps"],
+      rows: [
+        ["x2, or +1 die", "85%", "10%", "10%", "25%", "30%", "1%", "15%", "20%"],
+        ["x2, or +1 die", "85%", "10%", "10%", "25%", "30%", "1%", "15%", "20%"],
+        ["x2, or +1 die", "85%", "10%", "10%", "25%", "30%", "1%", "15%", "20%"],
+        ["x2, or +1 die", "86%", "15%", "10%", "29%", "35%", "5%", "20%", "25%"],
+        ["x3, or +2 dice", "87%", "20%", "15%", "33%", "40%", "15%", "27%", "30%"],
+        ["x3, or +2 dice", "88%", "25%", "15%", "37%", "45%", "20%", "33%", "35%"],
+        ["x3, or +2 dice", "90%", "30%", "20%", "42%", "50%", "25%", "40%", "40%"],
+        ["x3, or +2 dice", "92%", "35%", "20%", "47%", "55%", "30%", "47%", "45%"],
+        ["x4, or +3 dice", "94%", "42%", "25%", "52%", "60%", "35%", "55%", "50%"],
+        ["x4, or +3 dice", "96%", "48%", "25%", "57%", "65%", "40%", "62%", "55%"],
+        ["x4, or +3 dice", "98%", "55%", "30%", "62%", "70%", "45%", "70%", "60%"],
+        ["x4, or +3 dice", "99%", "65%", "30%", "67%", "80%", "50%", "78%", "65%"],
+        ["x5, or +4 dice", "99%", "70%", "35%", "72%", "90%", "55%", "86%", "70%"],
+        ["x5, or +4 dice", "99%", "75%", "35%", "77%", "100%", "60%", "94%", "75%"],
+        ["x5, or +4 dice", "99%", "85%", "40%", "82%", "105%", "65%", "99%", "80%"],
+      ],
+    },
+    "Monk": {
+      cols: ["Climb", "Hide", "Listen", "Pick Locks", "Move Quietly", "Traps"],
+      rows: [
+        ["85%", "10%", "10%", "25%", "15%", "20%"],
+        ["86%", "15%", "10%", "29%", "20%", "25%"],
+        ["87%", "20%", "15%", "33%", "27%", "30%"],
+        ["88%", "25%", "15%", "37%", "33%", "35%"],
+        ["90%", "30%", "20%", "42%", "40%", "40%"],
+        ["92%", "35%", "20%", "47%", "47%", "45%"],
+        ["94%", "42%", "25%", "52%", "55%", "50%"],
+        ["96%", "48%", "25%", "57%", "62%", "55%"],
+        ["98%", "55%", "30%", "62%", "70%", "60%"],
+        ["99%", "65%", "30%", "67%", "78%", "65%"],
+        ["99%", "70%", "35%", "72%", "86%", "70%"],
+        ["99%", "75%", "35%", "77%", "94%", "75%"],
+        ["99%", "85%", "40%", "82%", "99%", "80%"],
+        ["99%", "95%", "40%", "87%", "99%", "85%"],
+        ["99%", "99%", "50%", "92%", "99%", "90%"],
+        ["99%", "99%", "50%", "97%", "99%", "95%"],
+        ["99%", "99%", "55%", "99%", "99%", "99%"],
+      ],
+    },
+  };
+
   function bthbFor(className, level) {
     const arr = BTHB[className] || FIGHTER_PROGRESSION;
     const idx = Math.max(1, Math.min(20, Math.round(level))) - 1;
@@ -1005,7 +1155,7 @@
       + `. "nat20" = only a natural 20 (+5 special rule) clears it.`;
   }
 
-  // ---------- Saving Throws rendering ----------
+  // ---------- Saving Throws rendering (compact, current level only) ----------
 
   function renderSaves() {
     const table = SAVES_BY_CLASS[state.charClass] || FIGHTER_SAVES;
@@ -1015,22 +1165,82 @@
       ["death", "Death/Paralysis/Poison"], ["poly", "Petrification/Polymorph"],
       ["spells", "Spells (unlisted)"],
     ];
-    let html = "<thead><tr><th>Level</th>";
-    for (const [, label] of cols) html += `<th>${label}</th>`;
-    html += "</tr></thead><tbody>";
     let prevMax = 0;
-    for (const row of table) {
-      const lo = prevMax + 1;
-      const hi = row.max === Infinity ? null : row.max;
-      const label = hi ? (lo === hi ? `${lo}` : `${lo}–${hi}`) : `${lo}+`;
-      const isCurrent = lvl >= lo && (hi === null || lvl <= hi);
-      html += `<tr class="${isCurrent ? "current-row" : ""}"><td>${label}</td>`;
-      for (const [key] of cols) html += `<td>${row[key]}</td>`;
-      html += "</tr>";
-      prevMax = row.max;
+    let row = table[table.length - 1];
+    let lo = 1, hi = null;
+    for (const r of table) {
+      const rlo = prevMax + 1;
+      const rhi = r.max === Infinity ? null : r.max;
+      if (lvl >= rlo && (rhi === null || lvl <= rhi)) { row = r; lo = rlo; hi = rhi; break; }
+      prevMax = r.max;
     }
-    html += "</tbody>";
-    document.getElementById("savesMatrix").innerHTML = html;
+    document.getElementById("savesTag").textContent = `Lvl ${lvl}`;
+    let html = "";
+    for (const [key, label] of cols) {
+      html += `<div class="save-item"><span class="save-label">${label}</span><span class="save-value">${row[key]}</span></div>`;
+    }
+    document.getElementById("savesCard").innerHTML = html;
+
+    const unchangedThrough = hi === null ? "the rest of the class's progression" : `level ${hi}`;
+    const adv = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
+    const nextRow = adv.rows[lvl]; // rows[lvl] is the (lvl+1)th row, 0-indexed
+    const nextXpNote = nextRow
+      ? `Ready to advance to level ${lvl + 1} at ${nextRow.xp.toLocaleString()} XP.`
+      : `This class's printed progression tops out at level ${adv.rows.length}.`;
+    document.getElementById("savesNote").textContent =
+      `These numbers hold unchanged through ${unchangedThrough}. ${nextXpNote}`;
+  }
+
+  // ---------- Turning the Undead rendering (Cleric/Paladin, current level only) ----------
+
+  function renderTurning() {
+    const details = document.getElementById("turningDetails");
+    const body = document.getElementById("turningBody");
+    const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
+    const clericLvl = turningClericLevel(state.charClass, lvl);
+    if (clericLvl === null) {
+      details.style.display = "none";
+      return;
+    }
+    details.style.display = "";
+    const colIdx = turnColumnIndex(Math.min(clericLvl, 20));
+    const asNote = state.charClass === "Paladin"
+      ? `Turns as a level ${clericLvl} cleric (paladin level − 2).`
+      : `Turning as a level ${clericLvl} cleric.`;
+    let html = `<div class="bthb-note">${asNote}</div>`;
+    const relevantTypes = TURNING_TABLE.filter(t => t.vals[colIdx] !== "—");
+    if (!relevantTypes.length) {
+      html += `<div class="gate-note">No undead types are affectable yet at this level.</div>`;
+    } else {
+      for (const t of relevantTypes) {
+        html += `<div class="fact-row"><span class="fact-label">Type ${t.n} — ${t.name}</span><span class="fact-value">${t.vals[colIdx]}</span></div>`;
+      }
+      html += `<div class="bthb-note">Number = roll needed (2d6 affected). "T" = turned automatically. "D" = destroyed/controlled automatically (2d6). "D*" = as D but 1d6+6 affected. Evil clerics may control instead of destroy.</div>`;
+    }
+    body.innerHTML = html;
+  }
+
+  // ---------- Thief Skills rendering (Thief/Assassin/Monk, current level only) ----------
+
+  function renderThiefSkills() {
+    const details = document.getElementById("thiefSkillsDetails");
+    const body = document.getElementById("thiefSkillsBody");
+    const data = THIEF_SKILLS[state.charClass];
+    if (!data) {
+      details.style.display = "none";
+      return;
+    }
+    details.style.display = "";
+    const lvl = Math.max(1, Math.min(data.rows.length, Math.round(state.level)));
+    const row = data.rows[lvl - 1];
+    let html = "";
+    if (Math.round(state.level) > data.rows.length) {
+      html += `<div class="gate-note">This class's printed skill table tops out at level ${data.rows.length} — showing that row.</div>`;
+    }
+    data.cols.forEach((label, i) => {
+      html += `<div class="fact-row"><span class="fact-label">${label}</span><span class="fact-value">${row[i]}</span></div>`;
+    });
+    body.innerHTML = html;
   }
 
   // ---------- Level Advancement rendering ----------
@@ -1069,9 +1279,11 @@
   // Advancement after a token load — fixed now that it goes through
   // recomputeAll() instead of a hand-written list).
   const RENDERERS = [
-    { fn: render,         deps: new Set(["str", "dex", "con", "int", "wis", "cha", "ancestry"]) },
+    { fn: render,          deps: new Set(["str", "dex", "con", "int", "wis", "cha", "ancestry"]) },
     { fn: renderCombat,    deps: new Set(["str", "dex", "charClass", "level", "acMax"]) },
     { fn: renderSaves,     deps: new Set(["charClass", "level"]) },
+    { fn: renderTurning,   deps: new Set(["charClass", "level"]) },
+    { fn: renderThiefSkills, deps: new Set(["charClass", "level"]) },
     { fn: renderLevelAdv,  deps: new Set(["charClass", "level"]) },
   ];
   function recompute(changedKeys) {
