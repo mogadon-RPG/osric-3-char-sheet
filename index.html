@@ -283,6 +283,38 @@
   .fact-row:first-child { border-top: none; }
   .fact-row .fact-label { color: var(--ink-soft); }
   .fact-row .fact-value { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; }
+
+  .hp-box {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    background: var(--accent-soft);
+  }
+  .hp-box-label { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+  .hp-box-value {
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .hp-input-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .hp-input-label { font-size: 0.6rem; color: var(--ink-soft); }
+  .hp-input {
+    width: 34px;
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: 0.75rem;
+    text-align: center;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 2px 1px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .hp-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -300,6 +332,18 @@
 <div class="section">
   <div class="section-header">Ability Scores</div>
   <div class="panel-body" id="sheet"></div>
+</div>
+
+<div class="section">
+  <div class="section-header">Hit Points</div>
+  <div class="panel-body">
+    <div class="hp-box">
+      <span class="hp-box-label">Max HP</span>
+      <span class="hp-box-value" id="hpTotal">0</span>
+    </div>
+    <div class="bthb-note" id="hpBreakdown"></div>
+    <div class="hp-inputs" id="hpInputs"></div>
+  </div>
 </div>
 
 <div class="section">
@@ -897,6 +941,33 @@
     },
   };
 
+  // ---------- Hit Point tracking ----------
+  // Real hit-die rolls vary per character, so this tool doesn't invent a
+  // number — it sums whatever the player enters per rolled level, plus the
+  // deterministic parts the book does specify: the CON hp modifier (applied
+  // once per rolled level, using the correct fighter-type bonus) and, once
+  // a class's hit-dice count caps out, the flat post-cap hp/level the book
+  // gives instead (parsed straight out of the "N+M*" notation already in
+  // LEVEL_ADV, since that M is the cumulative bonus at that level).
+
+  function hdCapLevel(className) {
+    const data = LEVEL_ADV[className] || LEVEL_ADV["Fighter"];
+    for (let i = 0; i < data.rows.length; i++) {
+      if (String(data.rows[i].hd).includes("+")) return i; // levels before this one still roll
+    }
+    return data.rows.length; // this class's printed table never caps
+  }
+  function flatBonusAtLevel(className, level) {
+    const data = LEVEL_ADV[className] || LEVEL_ADV["Fighter"];
+    const idx = Math.min(level, data.rows.length) - 1;
+    const m = String(data.rows[idx].hd).match(/\+(\d+)\*/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  function conHpBonus() {
+    const r = CON_TABLE[clampInt(effectiveScore("con"))];
+    return isFighterType() ? r.hp[1] : r.hp[0];
+  }
+
   function bthbFor(className, level) {
     const arr = BTHB[className] || FIGHTER_PROGRESSION;
     const idx = Math.max(1, Math.min(20, Math.round(level))) - 1;
@@ -925,7 +996,7 @@
     { key: "cha", label: "CHA" },
   ];
 
-  const state = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, charClass: "Fighter", level: 1, ancestry: "Human" };
+  const state = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, charClass: "Fighter", level: 1, ancestry: "Human", hpRolls: [] };
 
   const sheetEl = document.getElementById("sheet");
   const ancestrySelect = document.getElementById("charAncestry");
@@ -1251,6 +1322,51 @@
 
   // ---------- Level Advancement rendering ----------
 
+  // ---------- Hit Points rendering ----------
+
+  function renderHP() {
+    const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
+    const cap = hdCapLevel(state.charClass);
+    const rolledLevels = Math.min(lvl, cap);
+
+    // Keep hpRolls in step with the current rolled-level count (class or
+    // level may have just changed) without discarding entries that still apply.
+    while (state.hpRolls.length < rolledLevels) state.hpRolls.push(0);
+    state.hpRolls.length = rolledLevels;
+
+    const conBonus = conHpBonus();
+    const rolledSum = state.hpRolls.reduce((a, v) => a + (Number(v) || 0), 0);
+    const conTotal = conBonus * rolledLevels;
+    const flatBonus = flatBonusAtLevel(state.charClass, lvl);
+    const grandTotal = rolledSum + conTotal + flatBonus;
+
+    document.getElementById("hpTotal").textContent = grandTotal;
+
+    const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
+    let inputsHtml = "";
+    for (let i = 0; i < rolledLevels; i++) {
+      const v = state.hpRolls[i] || "";
+      inputsHtml += `<div class="hp-input-item"><span class="hp-input-label">L${i + 1}</span>`
+        + `<input type="number" min="0" class="hp-input" data-idx="${i}" value="${v}" /></div>`;
+    }
+    document.getElementById("hpInputs").innerHTML = inputsHtml;
+    document.querySelectorAll(".hp-input").forEach(inp => {
+      inp.addEventListener("input", () => {
+        const idx = parseInt(inp.dataset.idx, 10);
+        state.hpRolls[idx] = parseInt(inp.value, 10) || 0;
+        recompute(["hpRolls"]);
+        persist();
+      });
+    });
+
+    const parts = [];
+    if (rolledLevels > 0) parts.push(`${rolledLevels} rolled die${rolledLevels > 1 ? "s" : ""} (${data.hitDie}): ${rolledSum}`);
+    if (conTotal !== 0) parts.push(`CON ${sign(conBonus)}×${rolledLevels} = ${sign(conTotal)}`);
+    if (flatBonus > 0) parts.push(`fixed post-cap bonus: +${flatBonus}`);
+    document.getElementById("hpBreakdown").textContent =
+      parts.length ? parts.join("  •  ") : "Enter this level's hit die roll below.";
+  }
+
   function renderLevelAdv() {
     const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
     const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
@@ -1296,6 +1412,7 @@
   // recomputeAll() instead of a hand-written list).
   const RENDERERS = [
     { fn: render,          deps: new Set(["str", "dex", "con", "int", "wis", "cha", "ancestry"]) },
+    { fn: renderHP,        deps: new Set(["con", "charClass", "level", "ancestry", "hpRolls"]) },
     { fn: renderCombat,    deps: new Set(["str", "dex", "charClass", "level", "acMax"]) },
     { fn: renderSaves,     deps: new Set(["charClass", "level"]) },
     { fn: renderTurning,   deps: new Set(["charClass", "level"]) },
