@@ -1,6 +1,6 @@
 {
   "name": "OSRIC 3.0 Ability Reckoner",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "manifest_version": 1,
   "author": "Mogadon",
   "description": "OSRIC 3.0 character calculator: abilities, combat, saves, and level advancement, linked to a token.",
