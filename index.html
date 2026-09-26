@@ -107,62 +107,54 @@
     align-items: center;
   }
 
-  .ability-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 0;
-    border-top: 1px solid var(--rule);
-    flex-wrap: nowrap;
+  .ability-row.major-value {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-top: none;
   }
-  .ability-row:first-child { border-top: none; }
-  .ab-name {
-    width: 26px;
-    flex: 0 0 26px;
-    font-weight: 700;
-    font-size: 0.72rem;
-    color: var(--accent);
-  }
+  .ability-row.major-value:first-child { margin-top: 0; }
+  .ab-head { display: flex; align-items: center; gap: 8px; }
+  .ab-head .mv-label { font-size: 0.85rem; }
   .ab-input {
-    width: 46px;
-    flex: 0 0 46px;
+    width: 58px;
     font-family: "SF Mono", "Courier New", monospace;
-    font-size: 0.82rem;
-    text-align: right;
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-align: center;
     border: 1px solid var(--rule);
-    border-radius: 2px;
-    padding: 2px 4px;
+    border-radius: 3px;
+    padding: 3px 4px;
     background: #fff;
     color: var(--ink);
   }
   .ab-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .eff-badge {
-    flex: 0 0 auto;
+  .ab-eff {
     font-family: "SF Mono", "Courier New", monospace;
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     color: var(--ink-soft);
     white-space: nowrap;
   }
-  .eff-badge b { color: var(--ink); font-size: 0.82rem; }
-  .eff-badge.out-of-range { color: var(--warn); }
-  .eff-badge.out-of-range b { color: var(--warn); }
-  .ab-chips {
+  .ab-eff b { color: var(--accent); font-size: 1rem; }
+  .ab-eff.out-of-range { color: var(--warn); }
+  .ab-eff.out-of-range b { color: var(--warn); }
+  .ab-desc { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .ab-desc-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 3px 6px;
-    font-size: 0.66rem;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.72rem;
     color: var(--ink-soft);
-    line-height: 1.5;
   }
-  .ab-chips b { color: var(--ink); font-family: "SF Mono", "Courier New", monospace; font-weight: 600; }
+  .ab-desc-row b { color: var(--ink); font-family: "SF Mono", "Courier New", monospace; font-weight: 700; white-space: nowrap; }
 
-  .legend {
+  .legend { margin-top: 2px; }
+  .legend-body {
     font-size: 0.63rem;
     color: var(--ink-soft);
     font-style: italic;
-    padding-top: 5px;
-    border-top: 1px solid var(--rule);
-    margin-top: 3px;
+    padding: 4px 2px 2px;
   }
 
   table.matrix {
@@ -1235,12 +1227,15 @@
     sheetEl.innerHTML = "";
     for (const a of abilities) {
       const row = document.createElement("div");
-      row.className = "ability-row";
+      row.className = "ability-row major-value";
 
-      const name = document.createElement("div");
-      name.className = "ab-name";
+      const head = document.createElement("div");
+      head.className = "ab-head";
+
+      const name = document.createElement("span");
+      name.className = "mv-label";
       name.textContent = a.label;
-      row.appendChild(name);
+      head.appendChild(name);
 
       const input = document.createElement("input");
       input.className = "ab-input";
@@ -1258,34 +1253,45 @@
         recompute([a.key]);
         persist();
       });
-      row.appendChild(input);
+      head.appendChild(input);
 
       const effBadge = document.createElement("span");
-      effBadge.className = "eff-badge";
-      row.appendChild(effBadge);
+      effBadge.className = "ab-eff";
+      head.appendChild(effBadge);
+
+      row.appendChild(head);
 
       const chips = document.createElement("div");
-      chips.className = "ab-chips";
+      chips.className = "ab-desc";
       row.appendChild(chips);
 
       sheetEl.appendChild(row);
       renderEffBadge(row, a.key);
       renderChips(row, a.key);
     }
-    const legend = document.createElement("div");
+
+    // Rarely-consulted reference text — pulled up rather than always on
+    // screen, per the "eliminate roll-ups except rarely-consulted data" rule.
+    const legend = document.createElement("details");
     legend.className = "legend";
+    const summary = document.createElement("summary");
+    summary.textContent = "Ancestry & class notes";
+    legend.appendChild(summary);
+    const legendBody = document.createElement("div");
+    legendBody.className = "legend-body";
     const adjParts = abilities
       .map(a => [a.label, ancestryAdj(a.key)])
       .filter(([, v]) => v !== 0)
       .map(([label, v]) => `${sign(v)} ${label}`);
     const adjText = adjParts.length ? adjParts.join(", ") : "no ability adjustments";
     const allowedClasses = [...(ANCESTRY_CLASSES[state.ancestry] || [])].join(", ");
-    legend.textContent = `${state.ancestry}: ${adjText}. Available classes: ${allowedClasses}. Fighter-types (Fighter/Paladin/Ranger) get STR's exceptional-% rows past 18 and CON's higher HP bonus at 17–19; other classes cap at plain 18 STR. Scores in red are outside ${state.ancestry}'s allowed range after ancestry adjustment.`;
+    legendBody.textContent = `${state.ancestry}: ${adjText}. Available classes: ${allowedClasses}. Fighter-types (Fighter/Paladin/Ranger) get STR's exceptional-% rows past 18 and CON's higher HP bonus at 17–19; other classes cap at plain 18 STR. Scores in red are outside ${state.ancestry}'s allowed range after ancestry adjustment.`;
+    legend.appendChild(legendBody);
     sheetEl.appendChild(legend);
   }
 
   function renderEffBadge(row, key) {
-    const badge = row.querySelector(".eff-badge");
+    const badge = row.querySelector(".ab-eff");
     const eff = effectiveScore(key);
     const [lo, hi] = ancestryRange(key);
     const ok = inRange(key);
@@ -1295,17 +1301,29 @@
     badge.innerHTML = `→ <b>${eff}</b>${adjText}${ok ? "" : ` <span title="Allowed range: ${lo}\u2013${hi}">⚠</span>`}`;
   }
 
+  // Full descriptive label for each short chip key, since the Major Value
+  // card format trades density for room to actually say what each derived
+  // stat is, not just an abbreviation the player has to already know.
+  const FULL_LABELS = {
+    Hit: "To-Hit bonus", Dmg: "Damage bonus", Enc: "Encumbrance allowance",
+    Minor: "Open Doors (minor feat)", Major: "Bend Bars / Lift Gates (major feat)",
+    Sur: "Surprise roll adjustment", Mis: "Missile To-Hit", Init: "Initiative effect",
+    "AC±": "Armour Class adj. (desc./asc.)", Agi: "Agility save adjustment",
+    HP: "Hit Points per level", Res: "Resurrection survival chance", Shock: "System shock survival chance",
+    Lang: "Additional languages", Ment: "Mental save adjustment",
+    Hench: "Max Henchmen", Loy: "Henchman loyalty adjustment", Rxn: "Reaction adjustment",
+  };
+
   function renderChips(row, key) {
-    const wrap = row.querySelector(".ab-chips");
+    const wrap = row.querySelector(".ab-desc");
     wrap.innerHTML = "";
     let eff = effectiveScore(key);
     if (key === "str" && !isFighterType() && eff > 18) eff = 18;
     for (const [label, value] of chipsFor(key, eff)) {
-      const span = document.createElement("span");
-      span.className = "chip";
-      span.title = label;
-      span.innerHTML = `${label} <b>${value}</b>`;
-      wrap.appendChild(span);
+      const line = document.createElement("div");
+      line.className = "ab-desc-row";
+      line.innerHTML = `<span>${FULL_LABELS[label] || label}</span><b>${value}</b>`;
+      wrap.appendChild(line);
     }
   }
 
