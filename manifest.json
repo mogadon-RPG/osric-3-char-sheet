@@ -1,6 +1,6 @@
 {
   "name": "OSRIC 3.0 Ability Reckoner",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "manifest_version": 1,
   "author": "Mogadon",
   "description": "Ability-score, ancestry, and combat-roll calculator for OSRIC 3.0 characters, linked to a token's metadata.",
