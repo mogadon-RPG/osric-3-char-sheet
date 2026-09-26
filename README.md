@@ -1,4 +1,9 @@
-# OSRIC 3.0 Ability Reckoner — proof of concept
+# OSRIC 3.0 Ability Reckoner — pilot
+
+**Reference document:** OSRIC 3.0 Player Guide (`OSRIC_3_0_Player_Guide_FINAL_v_7.pdf`).
+All rules content, tables, and section numbers cited below trace back to
+this document; nothing here is drawn from any other edition of OSRIC or
+from general AD&D 1e knowledge.
 
 Ability-score-driven calculations only, per your v1 scope: enter the six
 ability scores, get every derived stat the OSRIC 3.0 Player Guide's ability
@@ -19,11 +24,12 @@ original compact layout instead.
 - **WIS** — Mental Save Modifier.
 - **CHA** — Max. Henchmen, Loyalty, Reaction.
 
-**Not covered** (by design, per the source material): the five class/level
-saving-throw categories (Aimed Magic Items, Breath Weapons, Death/Paralysis/
-Poison, Petrification/Polymorph, Spells) — those come from class and level
-tables elsewhere in the book, not from ability scores, so they don't belong
-in an "ability-driven calculations" pass.
+**Also covered, added in a later pass** (not ability-driven, but now in the
+same tool): full Saving Throw tables for all ten classes (Aimed Magic Items,
+Breath Weapons, Death/Paralysis/Poison, Petrification/Polymorph, Spells),
+and Level Advancement tables (XP thresholds, hit dice, named level benefits,
+and spell-slot progressions for casting classes) — both driven by the
+Class/Level fields below, sourced from Player Guide 1.3.x.4A/4B.
 
 ## Class restrictions by ancestry
 
@@ -105,15 +111,15 @@ the top instead of a token link.
 
 ## Testing inside Owlbear Rodeo
 
-You'd need to host `index.html` + `manifest.json` somewhere reachable over
-HTTPS (this is the piece we punted on — repo/hosting still undecided) and
-add it as a custom extension via its manifest URL. Once added, opening it
-with exactly one token selected links the sheet to that token: it reads and
-writes its ability scores to the token's metadata under the key
-`com.mogadon.osric-ability-reckoner/state`, so scores persist with the token
-across sessions.
+Hosted on GitHub Pages at `mogadon-RPG/osric-ability-reckoner` — add it via
+its manifest URL:
+`https://mogadon-rpg.github.io/osric-ability-reckoner/manifest.json`.
+Once added, opening it with exactly one token selected links the sheet to
+that token: it reads and writes its ability scores to the token's metadata
+under the key `com.mogadon.osric-ability-reckoner/state`, so scores persist
+with the token across sessions.
 
-## Known rough edges (POC, not final)
+## Known rough edges (pilot, not final)
 
 - No input validation beyond clamping to 3–19 — no UI polish on bad input.
 - The Fighter-type flag is a single checkbox, not tied to an actual class
