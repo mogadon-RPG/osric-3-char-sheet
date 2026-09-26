@@ -268,6 +268,25 @@
   .fact-row .fact-label { color: var(--ink-soft); }
   .fact-row .fact-value { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; }
 
+  .spell-ladder-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin-top: 6px;
+    margin-bottom: 2px;
+  }
+  .spell-ladder { border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .spell-ladder-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 8px;
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--rule);
+  }
+  .spell-ladder-row:first-child { border-top: none; }
+  .spell-ladder-row b { font-family: "SF Mono", "Courier New", monospace; color: var(--accent); font-weight: 800; }
+
   /* ---------- Major Values: the one consistent prominent-stat style ----------
      STR/DEX/CON/INT/WIS/CHA (effective score), Total HP, Current HP, Level,
      XP, AC, Ancestry, Class all use this family so they read as a single
@@ -352,7 +371,7 @@
 </head>
 <body>
 
-<h1>Ability Reckoner <span class="tag">OSRIC 3.0 · Pilot</span></h1>
+<h1>CharSheet <span class="tag">OSRIC 3.0 · Pilot</span></h1>
 
 <div id="status">Checking for Owlbear Rodeo…</div>
 
@@ -381,6 +400,10 @@
     <span class="mv-value" id="acDescDisplay">10</span>
   </div>
   -->
+  <div class="major-value mv-editable">
+    <span class="mv-label">GP</span>
+    <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
+  </div>
 </div>
 
 <div class="section">
@@ -1159,7 +1182,7 @@
   const state = {
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
-    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: false,
+    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: false, gp: 0,
   };
 
   const sheetEl = document.getElementById("sheet");
@@ -1170,6 +1193,7 @@
   const armorSelect = document.getElementById("armorSelect");
   const shieldCheckbox = document.getElementById("shieldCheckbox");
   const currentHPInput = document.getElementById("currentHPInput");
+  const gpInput = document.getElementById("gpInput");
 
   for (const anc of Object.keys(ANCESTRY)) {
     const opt = document.createElement("option");
@@ -1198,6 +1222,18 @@
 
   function isFighterType() {
     return FIGHTER_TYPE_CLASSES.has(state.charClass);
+  }
+
+  // Percentile STR (18.01-18.99) is only a valid *rolled* result: it's a
+  // fighter-type-only mechanic, and only applies when the base score you
+  // actually rolled was 18 — not when a lower roll reaches 18 via an
+  // ancestry adjustment (ancestry is added on top of the base separately
+  // and never touches this). Any fractional base outside those conditions
+  // isn't a real result, so it collapses to a whole number.
+  function sanitizeStrBase(v) {
+    if (isNaN(v)) return 10;
+    const eligible = isFighterType() && Math.floor(v) === 18;
+    return eligible ? v : Math.round(v);
   }
 
   // ---------- ancestry / effective-score resolution ----------
@@ -1272,10 +1308,17 @@
       input.max = "19";
       input.step = a.key === "str" ? "0.01" : "1";
       input.value = state[a.key];
-      input.title = "Base (rolled) score";
+      input.title = a.key === "str"
+        ? "Base (rolled) score — percentile (18.01–18.99) only applies to a natural 18 on a fighter-type"
+        : "Base (rolled) score";
       input.addEventListener("input", () => {
-        const v = parseFloat(input.value);
-        state[a.key] = isNaN(v) ? 10 : v;
+        let v = parseFloat(input.value);
+        v = isNaN(v) ? 10 : v;
+        if (a.key === "str") {
+          const sanitized = sanitizeStrBase(v);
+          if (sanitized !== v) { v = sanitized; input.value = v; }
+        }
+        state[a.key] = v;
         renderEffBadge(row, a.key);
         renderChips(row, a.key);
         recompute([a.key]);
@@ -1386,20 +1429,25 @@
   });
   classSelect.addEventListener("change", () => {
     state.charClass = classSelect.value;
-    // Percentile STR (18.01-18.99) is a fighter-type-only mechanic — a
-    // non-fighter-type character never had that roll to begin with, so
-    // switching away from Fighter/Paladin/Ranger eliminates it rather than
-    // just hiding it (switching back later starts fresh at plain 18, not
-    // a restored percentile — the roll doesn't come back on its own).
+    // Percentile STR eligibility depends on the new class (fighter-type
+    // only) — re-run the same sanitizer the STR input itself uses, so
+    // switching classes can never leave a base that's no longer valid.
     let strChanged = false;
-    if (!isFighterType() && state.str > 18) {
-      state.str = 18;
+    const sanitizedStr = sanitizeStrBase(state.str);
+    if (sanitizedStr !== state.str) {
+      state.str = sanitizedStr;
       strChanged = true;
     }
+    // A new class means a new hit die — old per-level rolls from the
+    // previous class don't mean anything, so they're cleared rather than
+    // just resized to fit.
+    state.hpRolls = [];
     // XP thresholds differ per class, so level is re-derived under the new
     // class's table rather than carried over from the old one.
     state.level = levelFromXP(state.charClass, state.xp);
-    recompute(strChanged ? ["charClass", "level", "str"] : ["charClass", "level"]);
+    recompute(strChanged
+      ? ["charClass", "level", "str", "hpRolls"]
+      : ["charClass", "level", "hpRolls"]);
     persist();
   });
   xpInput.addEventListener("input", () => {
@@ -1425,6 +1473,10 @@
   });
   currentHPInput.addEventListener("input", () => {
     state.currentHP = currentHPInput.value === "" ? null : (parseInt(currentHPInput.value, 10) || 0);
+    persist();
+  });
+  gpInput.addEventListener("input", () => {
+    state.gp = Math.max(0, parseInt(gpInput.value, 10) || 0);
     persist();
   });
 
@@ -1641,8 +1693,11 @@
       html += `<div class="fact-row"><span class="fact-label">This level grants</span><span class="fact-value">${row.notes}</span></div>`;
     }
     if (data.spellLabel && row.spells) {
-      const slots = row.spells.map((s, i) => `${data.spellCols[i]}:${s === null ? "—" : s}`).join("  ");
-      html += `<div class="fact-row"><span class="fact-label">${data.spellLabel}</span><span class="fact-value">${slots}</span></div>`;
+      html += `<div class="spell-ladder-title">${data.spellLabel}</div><div class="spell-ladder">`;
+      row.spells.forEach((s, i) => {
+        html += `<div class="spell-ladder-row"><span>Lv ${data.spellCols[i]}</span><b>${s === null ? "—" : s}</b></div>`;
+      });
+      html += `</div>`;
     }
     if (nextRow) {
       html += `<div class="fact-row"><span class="fact-label">Next level (${lvl + 1}) at</span><span class="fact-value">${nextRow.xp.toLocaleString()} XP</span></div>`;
@@ -1699,6 +1754,7 @@
     xpInput.value = state.xp;
     armorSelect.value = state.armor;
     shieldCheckbox.checked = state.shield;
+    gpInput.value = state.gp;
   }
 
   // ---------- JSON Export / Import ----------
