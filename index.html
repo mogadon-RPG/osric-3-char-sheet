@@ -1378,6 +1378,10 @@
     persist();
   });
   xpInput.addEventListener("input", () => {
+    // Strip leading zeros live (007000 -> 7000) without fighting the user
+    // while the field is empty or is just "0".
+    const stripped = xpInput.value.replace(/^0+(?=\d)/, "");
+    if (stripped !== xpInput.value) xpInput.value = stripped;
     state.xp = Math.max(0, parseInt(xpInput.value, 10) || 0);
     state.level = levelFromXP(state.charClass, state.xp);
     recompute(["xp", "level"]);
