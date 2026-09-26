@@ -20,7 +20,7 @@
     margin: 0; padding: 0;
     background: var(--paper);
     color: var(--ink);
-    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 14.5px;
   }
   body { padding: 10px 12px 24px; max-width: 420px; margin: 0 auto; }
@@ -333,15 +333,10 @@
   <div class="panel-body" id="thiefSkillsBody"></div>
 </div>
 
-<details>
-  <summary>Level Advancement</summary>
-  <div class="panel-body">
-    <div class="matrix-scroll">
-      <table class="matrix" id="levelMatrix"></table>
-    </div>
-    <div class="bthb-note" id="levelCapNote"></div>
-  </div>
-</details>
+<div class="section">
+  <div class="section-header">Level Advancement <span class="tag" id="levelTag"></span></div>
+  <div class="panel-body" id="levelBody"></div>
+</div>
 
 <details>
   <summary>Export / Import</summary>
@@ -1198,13 +1193,8 @@
     document.getElementById("savesCard").innerHTML = html;
 
     const unchangedThrough = hi === null ? "the rest of the class's progression" : `level ${hi}`;
-    const adv = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
-    const nextRow = adv.rows[lvl]; // rows[lvl] is the (lvl+1)th row, 0-indexed
-    const nextXpNote = nextRow
-      ? `Ready to advance to level ${lvl + 1} at ${nextRow.xp.toLocaleString()} XP.`
-      : `This class's printed progression tops out at level ${adv.rows.length}.`;
     document.getElementById("savesNote").textContent =
-      `These numbers hold unchanged through ${unchangedThrough}. ${nextXpNote}`;
+      `These numbers hold unchanged through ${unchangedThrough}.`;
   }
 
   // ---------- Turning the Undead rendering (Cleric/Paladin, current level only) ----------
@@ -1264,23 +1254,33 @@
   function renderLevelAdv() {
     const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
     const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
-    const hasSpells = !!data.spellLabel;
-    let html = "<thead><tr><th>Lvl</th><th>XP Needed</th><th>Hit Dice</th>";
-    if (hasSpells) for (const c of data.spellCols) html += `<th>${c}</th>`;
-    html += `<th class="cell-notes">Notes</th></tr></thead><tbody>`;
-    data.rows.forEach((row, i) => {
-      const rowLevel = i + 1;
-      const isCurrent = rowLevel === lvl || (rowLevel === data.rows.length && lvl > data.rows.length);
-      html += `<tr class="${isCurrent ? "current-row" : ""}"><td>${rowLevel}</td>`
-        + `<td>${row.xp.toLocaleString()}</td><td>${row.hd}</td>`;
-      if (hasSpells) for (const s of row.spells) html += `<td>${s === null ? "—" : s}</td>`;
-      html += `<td class="cell-notes">${row.notes}</td></tr>`;
-    });
-    html += "</tbody>";
-    document.getElementById("levelMatrix").innerHTML = html;
-    document.getElementById("levelCapNote").textContent =
-      `Hit die: ${data.hitDie}. ${data.capNote}`
-      + (lvl > data.rows.length ? ` Selected level ${lvl} is beyond this class's printed table — showing its last row.` : "");
+    const capped = lvl > data.rows.length;
+    const rowIdx = Math.min(lvl, data.rows.length) - 1;
+    const row = data.rows[rowIdx];
+    const nextRow = capped ? null : data.rows[lvl]; // rows[lvl] = level (lvl+1), 0-indexed
+
+    document.getElementById("levelTag").textContent = `Lvl ${lvl}`;
+
+    let html = `<div class="fact-row"><span class="fact-label">Hit Dice (${data.hitDie})</span><span class="fact-value">${row.hd}</span></div>`;
+    if (row.notes && row.notes !== "—") {
+      html += `<div class="fact-row"><span class="fact-label">This level grants</span><span class="fact-value">${row.notes}</span></div>`;
+    }
+    if (data.spellLabel && row.spells) {
+      const slots = row.spells.map((s, i) => `${data.spellCols[i]}:${s === null ? "—" : s}`).join("  ");
+      html += `<div class="fact-row"><span class="fact-label">${data.spellLabel}</span><span class="fact-value">${slots}</span></div>`;
+    }
+    if (nextRow) {
+      html += `<div class="fact-row"><span class="fact-label">Next level (${lvl + 1}) at</span><span class="fact-value">${nextRow.xp.toLocaleString()} XP</span></div>`;
+      if (nextRow.notes && nextRow.notes !== "—") {
+        html += `<div class="fact-row"><span class="fact-label">Next level grants</span><span class="fact-value">${nextRow.notes}</span></div>`;
+      }
+    } else {
+      html += `<div class="gate-note">${data.capNote}</div>`;
+    }
+    if (capped) {
+      html += `<div class="gate-note">Selected level ${lvl} is beyond this class's printed table (tops out at ${data.rows.length}) — showing its last row.</div>`;
+    }
+    document.getElementById("levelBody").innerHTML = html;
   }
 
   // ---------- Dependency-driven render dispatch ----------
