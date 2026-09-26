@@ -821,7 +821,7 @@
         state[a.key] = isNaN(v) ? 10 : v;
         renderEffBadge(row, a.key);
         renderChips(row, a.key);
-        if (a.key === "str" || a.key === "dex") renderCombat();
+        recompute([a.key]);
         persist();
       });
       row.appendChild(input);
@@ -895,28 +895,20 @@
   ancestrySelect.addEventListener("change", () => {
     state.ancestry = ancestrySelect.value;
     const switched = updateClassOptions();
-    render();
-    renderCombat();
-    renderSaves();
-    renderLevelAdv();
+    recompute(switched ? ["ancestry", "charClass"] : ["ancestry"]);
     persist();
   });
   classSelect.addEventListener("change", () => {
     state.charClass = classSelect.value;
-    render();
-    renderCombat();
-    renderSaves();
-    renderLevelAdv();
+    recompute(["charClass"]);
     persist();
   });
   levelInput.addEventListener("input", () => {
     state.level = parseInt(levelInput.value, 10) || 1;
-    renderCombat();
-    renderSaves();
-    renderLevelAdv();
+    recompute(["level"]);
     persist();
   });
-  acMaxInput.addEventListener("input", renderCombat);
+  acMaxInput.addEventListener("input", () => recompute(["acMax"]));
 
   // ---------- Combat Rolls (ascending AC formula, 1.4.2.4A) ----------
 
@@ -1018,10 +1010,33 @@
       + (lvl > data.rows.length ? ` Selected level ${lvl} is beyond this class's printed table — showing its last row.` : "");
   }
 
-  render();
-  renderCombat();
-  renderSaves();
-  renderLevelAdv();
+  // ---------- Dependency-driven render dispatch ----------
+  //
+  // Each panel declares the state keys it actually reads. A state change
+  // names which keys it touched; recompute() fires only the panels that
+  // depend on at least one of them. Adding a new panel later means adding
+  // one entry here with its own deps — no hunting through event handlers
+  // to remember where to wire in a call, and no risk of a panel going
+  // stale because some handler predates it (which is exactly how
+  // refreshSelection() below ended up not refreshing Saves/Level
+  // Advancement after a token load — fixed now that it goes through
+  // recomputeAll() instead of a hand-written list).
+  const RENDERERS = [
+    { fn: render,         deps: new Set(["str", "dex", "con", "int", "wis", "cha", "ancestry"]) },
+    { fn: renderCombat,    deps: new Set(["str", "dex", "charClass", "level", "acMax"]) },
+    { fn: renderSaves,     deps: new Set(["charClass", "level"]) },
+    { fn: renderLevelAdv,  deps: new Set(["charClass", "level"]) },
+  ];
+  function recompute(changedKeys) {
+    for (const { fn, deps } of RENDERERS) {
+      if (changedKeys.some(k => deps.has(k))) fn();
+    }
+  }
+  function recomputeAll() {
+    for (const { fn } of RENDERERS) fn();
+  }
+
+  recomputeAll();
 
   // ---------- Owlbear Rodeo integration (optional) ----------
 
@@ -1068,8 +1083,7 @@
       classSelect.value = state.charClass;
       updateClassOptions();
       levelInput.value = state.level;
-      render();
-      renderCombat();
+      recomputeAll();
     }
     statusEl.textContent = `Linked: ${item?.name || boundItemId}`;
     statusEl.classList.add("linked");
