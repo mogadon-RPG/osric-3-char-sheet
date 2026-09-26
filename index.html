@@ -208,6 +208,37 @@
     text-align: center;
   }
   .cc-footer a { color: var(--ink-soft); }
+
+  .io-block { margin-bottom: 10px; }
+  .io-block:last-child { margin-bottom: 0; }
+  .io-btn {
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 9px;
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    cursor: pointer;
+    margin-bottom: 5px;
+  }
+  .io-btn:hover { background: var(--accent); color: var(--paper); }
+  .io-box {
+    display: block;
+    width: 100%;
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: 0.68rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 5px 6px;
+    background: #fff;
+    color: var(--ink);
+    resize: vertical;
+  }
+  .io-note { font-size: 0.63rem; color: var(--ink-soft); margin-top: 3px; min-height: 1.2em; }
+  .io-note.io-error { color: var(--warn); }
+  .io-note.io-ok { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -256,6 +287,22 @@
       <table class="matrix" id="levelMatrix"></table>
     </div>
     <div class="bthb-note" id="levelCapNote"></div>
+  </div>
+</details>
+
+<details>
+  <summary>Export / Import</summary>
+  <div class="panel-body">
+    <div class="io-block">
+      <button type="button" id="exportBtn" class="io-btn">Export this character as JSON</button>
+      <textarea id="exportBox" class="io-box" rows="5" readonly placeholder="Click Export, then copy this text."></textarea>
+      <div class="io-note" id="exportNote"></div>
+    </div>
+    <div class="io-block">
+      <textarea id="importBox" class="io-box" rows="5" placeholder="Paste a character's exported JSON here."></textarea>
+      <button type="button" id="importBtn" class="io-btn">Import into this token</button>
+      <div class="io-note" id="importNote"></div>
+    </div>
   </div>
 </details>
 
@@ -1036,6 +1083,102 @@
     for (const { fn } of RENDERERS) fn();
   }
 
+  // Syncs the top-of-sheet controls (Ancestry/Class/Level) to whatever is
+  // currently in `state`. Used after any bulk load of state — a token link
+  // or a JSON import — so there's one place that has to remember to do this,
+  // not one per call site.
+  function syncTopControls() {
+    ancestrySelect.value = state.ancestry;
+    updateClassOptions();
+    classSelect.value = state.charClass;
+    levelInput.value = state.level;
+  }
+
+  // ---------- JSON Export / Import ----------
+  // Manual copy-paste transfer of a character between tokens/rooms, since
+  // OBR item metadata is scoped to one token in one scene and there's no
+  // confirmed cross-room persistence to lean on instead (see design notes).
+
+  const SCHEMA_VERSION = 1;
+  const STATE_KEYS = ["str", "dex", "con", "int", "wis", "cha", "charClass", "level", "ancestry"];
+
+  function exportState() {
+    const payload = { schemaVersion: SCHEMA_VERSION };
+    for (const k of STATE_KEYS) payload[k] = state[k];
+    return JSON.stringify(payload, null, 2);
+  }
+
+  function validateImportPayload(obj) {
+    const errors = [];
+    if (obj === null || typeof obj !== "object") return ["Not a JSON object."];
+    for (const k of ["str", "dex", "con", "int", "wis", "cha"]) {
+      const v = obj[k];
+      if (typeof v !== "number" || isNaN(v) || v < 3 || v > 19) {
+        errors.push(`"${k}" must be a number from 3 to 19 (got ${JSON.stringify(v)}).`);
+      }
+    }
+    if (typeof obj.ancestry !== "string" || !ANCESTRY[obj.ancestry]) {
+      errors.push(`"ancestry" isn't a recognised ancestry (got ${JSON.stringify(obj.ancestry)}).`);
+    }
+    if (typeof obj.charClass !== "string" || !BTHB[obj.charClass]) {
+      errors.push(`"charClass" isn't a recognised class (got ${JSON.stringify(obj.charClass)}).`);
+    }
+    if (!Number.isInteger(obj.level) || obj.level < 1 || obj.level > 20) {
+      errors.push(`"level" must be a whole number from 1 to 20 (got ${JSON.stringify(obj.level)}).`);
+    }
+    return errors;
+  }
+
+  const exportBtn = document.getElementById("exportBtn");
+  const exportBox = document.getElementById("exportBox");
+  const exportNote = document.getElementById("exportNote");
+  const importBtn = document.getElementById("importBtn");
+  const importBox = document.getElementById("importBox");
+  const importNote = document.getElementById("importNote");
+
+  exportBtn.addEventListener("click", async () => {
+    const json = exportState();
+    exportBox.value = json;
+    try {
+      await navigator.clipboard.writeText(json);
+      exportNote.textContent = "Copied to clipboard.";
+      exportNote.className = "io-note io-ok";
+    } catch (e) {
+      exportBox.focus();
+      exportBox.select();
+      exportNote.textContent = "Couldn't reach the clipboard — text is selected, copy it manually (Ctrl/Cmd+C).";
+      exportNote.className = "io-note";
+    }
+  });
+
+  importBtn.addEventListener("click", () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(importBox.value);
+    } catch (e) {
+      importNote.textContent = "That's not valid JSON — paste the exact text an Export produced.";
+      importNote.className = "io-note io-error";
+      return;
+    }
+    const errors = validateImportPayload(parsed);
+    if (errors.length) {
+      importNote.innerHTML = "Rejected — " + errors.join(" ");
+      importNote.className = "io-note io-error";
+      return;
+    }
+    if (parsed.schemaVersion !== SCHEMA_VERSION) {
+      importNote.textContent = `Note: this was exported from schema v${parsed.schemaVersion}, this sheet is on v${SCHEMA_VERSION} — imported anyway since all known fields checked out, but double-check the result.`;
+      importNote.className = "io-note";
+    } else {
+      importNote.textContent = "Imported.";
+      importNote.className = "io-note io-ok";
+    }
+    for (const k of STATE_KEYS) state[k] = parsed[k];
+    syncTopControls();
+    recomputeAll();
+    persist();
+  });
+
   recomputeAll();
 
   // ---------- Owlbear Rodeo integration (optional) ----------
@@ -1079,10 +1222,7 @@
     const saved = item?.metadata?.[METADATA_KEY];
     if (saved) {
       Object.assign(state, saved);
-      ancestrySelect.value = state.ancestry;
-      classSelect.value = state.charClass;
-      updateClassOptions();
-      levelInput.value = state.level;
+      syncTopControls();
       recomputeAll();
     }
     statusEl.textContent = `Linked: ${item?.name || boundItemId}`;
