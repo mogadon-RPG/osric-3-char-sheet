@@ -382,10 +382,13 @@
     <span class="mv-label">AC (asc.)</span>
     <span class="mv-value" id="acAscDisplay">10</span>
   </div>
+  <!-- AC (descending) removed from the UI — almost nobody was using it.
+       Left commented rather than deleted in case we want it back.
   <div class="major-value">
     <span class="mv-label">AC (desc.)</span>
     <span class="mv-value" id="acDescDisplay">10</span>
   </div>
+  -->
 </div>
 
 <div class="section">
@@ -1588,7 +1591,8 @@
   function renderAC() {
     const ac = computeAC();
     document.getElementById("acAscDisplay").textContent = ac.ascending;
-    document.getElementById("acDescDisplay").textContent = ac.descending;
+    // AC (descending) UI removed — see the commented-out HTML block above.
+    // document.getElementById("acDescDisplay").textContent = ac.descending;
     document.getElementById("acNote").textContent =
       `${state.armor}${state.shield ? " + shield" : ""}, DEX-adjusted. Ascending AC is what the Combat Rolls table below uses.`;
   }
