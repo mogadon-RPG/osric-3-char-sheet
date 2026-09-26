@@ -91,6 +91,22 @@
   details[open] summary::after { content: "▾"; }
   .panel-body { padding: 6px 9px 8px; }
 
+  .section {
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .section-header {
+    background: var(--paper-dim);
+    padding: 5px 9px;
+    font-weight: 600;
+    font-size: 0.78rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
   .ability-row {
     display: flex;
     align-items: center;
@@ -281,41 +297,41 @@
   <label>Lvl <input type="number" id="charLevel" min="1" max="20" value="1" /></label>
 </div>
 
-<details open>
-  <summary>Ability Scores</summary>
+<div class="section">
+  <div class="section-header">Ability Scores</div>
   <div class="panel-body" id="sheet"></div>
-</details>
+</div>
 
-<details>
-  <summary>
+<div class="section">
+  <div class="section-header">
     Combat Rolls
     <span class="combat-range">to AC <input type="number" id="acMax" min="11" max="40" value="25" /></span>
-  </summary>
+  </div>
   <div class="panel-body">
     <div class="matrix-scroll">
       <table class="matrix" id="combatMatrix"></table>
     </div>
     <div class="bthb-note" id="bthbNote"></div>
   </div>
-</details>
+</div>
 
-<details open>
-  <summary>Saving Throws <span class="tag" id="savesTag"></span></summary>
+<div class="section">
+  <div class="section-header">Saving Throws <span class="tag" id="savesTag"></span></div>
   <div class="panel-body">
     <div class="save-card" id="savesCard"></div>
     <div class="bthb-note" id="savesNote"></div>
   </div>
-</details>
+</div>
 
-<details id="turningDetails">
-  <summary>Turning the Undead</summary>
+<div class="section" id="turningDetails">
+  <div class="section-header">Turning the Undead</div>
   <div class="panel-body" id="turningBody"></div>
-</details>
+</div>
 
-<details id="thiefSkillsDetails">
-  <summary>Thief Skills</summary>
+<div class="section" id="thiefSkillsDetails">
+  <div class="section-header">Thief Skills</div>
   <div class="panel-body" id="thiefSkillsBody"></div>
-</details>
+</div>
 
 <details>
   <summary>Level Advancement</summary>
