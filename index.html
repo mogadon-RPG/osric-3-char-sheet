@@ -21,7 +21,7 @@
     background: var(--paper);
     color: var(--ink);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 14.5px;
+    font-size: 16px;
   }
   body { padding: 10px 12px 24px; max-width: 420px; margin: 0 auto; }
 
@@ -284,23 +284,66 @@
   .fact-row .fact-label { color: var(--ink-soft); }
   .fact-row .fact-value { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; }
 
-  .hp-box {
+  /* ---------- Major Values: the one consistent prominent-stat style ----------
+     STR/DEX/CON/INT/WIS/CHA (effective score), Total HP, Current HP, Level,
+     XP, AC, Ancestry, Class all use this family so they read as a single
+     visual language instead of each getting its own one-off box. */
+  .major-value {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 6px 10px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 52px;
+    padding: 4px 8px;
     border: 2px solid var(--accent);
-    border-radius: 4px;
+    border-radius: 5px;
     background: var(--accent-soft);
+    text-align: center;
   }
-  .hp-box-label { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
-  .hp-box-value {
+  .mv-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .mv-value {
     font-family: "SF Mono", "Courier New", monospace;
-    font-size: 1.7rem;
+    font-size: 1.25rem;
     font-weight: 800;
     color: var(--accent);
+    line-height: 1.15;
   }
-  .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .major-value.mv-editable { padding: 4px 4px; }
+  .major-value.mv-editable .mv-value {
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: center;
+    padding: 0;
+    -moz-appearance: textfield;
+  }
+  .major-value.mv-editable .mv-value::-webkit-outer-spin-button,
+  .major-value.mv-editable .mv-value::-webkit-inner-spin-button { margin: 0; }
+  .major-value.mv-editable .mv-value:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+
+  .mv-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .mv-select {
+    font-family: inherit;
+    font-weight: 700;
+    color: var(--accent);
+    border: 2px solid var(--accent);
+    border-radius: 5px;
+    background: var(--accent-soft);
+    padding: 4px 6px;
+    font-size: 0.85rem;
+  }
+
+  .hp-boxes { display: flex; gap: 8px; margin-bottom: 6px; }
+  .hp-boxes .major-value { flex: 1; }
+
+  .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .hp-input-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
   .hp-input-label { font-size: 0.6rem; color: var(--ink-soft); }
   .hp-input {
@@ -315,6 +358,12 @@
     color: var(--ink);
   }
   .hp-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .ac-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 6px; }
+  .ac-control { display: flex; flex-direction: column; gap: 2px; }
+  .ac-control label { font-size: 0.65rem; color: var(--ink-soft); }
+  .ac-control select { font-family: inherit; font-size: 0.75rem; border: 1px solid var(--rule); border-radius: 2px; padding: 3px 4px; background: #fff; color: var(--ink); }
+  .ac-checkbox { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -324,9 +373,41 @@
 <div id="status">Checking for Owlbear Rodeo…</div>
 
 <div class="flags">
-  <label>Ancestry <select id="charAncestry"></select></label>
-  <label>Class <select id="charClass"></select></label>
-  <label>Lvl <input type="number" id="charLevel" min="1" max="20" value="1" /></label>
+  <label>Ancestry <select id="charAncestry" class="mv-select"></select></label>
+  <label>Class <select id="charClass" class="mv-select"></select></label>
+</div>
+
+<div class="mv-row">
+  <div class="major-value">
+    <span class="mv-label">Level</span>
+    <span class="mv-value" id="levelDisplay">1</span>
+  </div>
+  <div class="major-value mv-editable">
+    <span class="mv-label">XP</span>
+    <input type="number" class="mv-value" id="xpInput" min="0" step="1" value="0" />
+  </div>
+  <div class="major-value">
+    <span class="mv-label">AC (asc.)</span>
+    <span class="mv-value" id="acAscDisplay">10</span>
+  </div>
+  <div class="major-value">
+    <span class="mv-label">AC (desc.)</span>
+    <span class="mv-value" id="acDescDisplay">10</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">Armour Class</div>
+  <div class="panel-body">
+    <div class="ac-row">
+      <div class="ac-control">
+        <label for="armorSelect">Armour</label>
+        <select id="armorSelect"></select>
+      </div>
+      <label class="ac-checkbox"><input type="checkbox" id="shieldCheckbox" /> Shield (+1)</label>
+    </div>
+    <div class="bthb-note" id="acNote"></div>
+  </div>
 </div>
 
 <div class="section">
@@ -337,12 +418,23 @@
 <div class="section">
   <div class="section-header">Hit Points</div>
   <div class="panel-body">
-    <div class="hp-box">
-      <span class="hp-box-label">Max HP</span>
-      <span class="hp-box-value" id="hpTotal">0</span>
+    <div class="hp-boxes">
+      <div class="major-value">
+        <span class="mv-label">Max HP</span>
+        <span class="mv-value" id="hpTotal">0</span>
+      </div>
+      <div class="major-value mv-editable">
+        <span class="mv-label">Current HP</span>
+        <input type="number" class="mv-value" id="currentHPInput" step="1" />
+      </div>
     </div>
     <div class="bthb-note" id="hpBreakdown"></div>
-    <div class="hp-inputs" id="hpInputs"></div>
+    <details>
+      <summary>Per-level rolls</summary>
+      <div class="panel-body">
+        <div class="hp-inputs" id="hpInputs"></div>
+      </div>
+    </details>
   </div>
 </div>
 
@@ -985,6 +1077,54 @@
   function clampInt(v) { return Math.max(3, Math.min(19, Math.round(v))); }
   const sign = n => (n > 0 ? `+${n}` : `${n}`);
 
+  // ---------- OSRIC 3.0 Armour (Player Guide 1.4.2.G) ----------
+  // descAC is the absolute descending AC when wearing that armour alone
+  // (ascending = 20 - descAC, which holds for every row in the printed
+  // table). A shield is a flat +1 ascending / -1 descending modifier
+  // regardless of size (large/medium/small differ in cost and how many
+  // attacks per round it can block, not in the AC bonus itself).
+  const ARMOR_TABLE = {
+    "None (unarmoured)": { descAC: 10 },
+    "Padded":            { descAC: 8 },
+    "Leather":           { descAC: 8 },
+    "Studded leather":   { descAC: 7 },
+    "Ring mail":         { descAC: 7 },
+    "Scale or lamellar": { descAC: 6 },
+    "Chain mail":        { descAC: 5 },
+    "Elfin mail":        { descAC: 5 },
+    "Banded":            { descAC: 4 },
+    "Splint":            { descAC: 4 },
+    "Plate mail":        { descAC: 3 },
+  };
+  function computeAC() {
+    const armor = ARMOR_TABLE[state.armor] || ARMOR_TABLE["None (unarmoured)"];
+    const armorDesc = armor.descAC;
+    const armorAsc = 20 - armorDesc;
+    const shieldDesc = state.shield ? -1 : 0;
+    const shieldAsc = state.shield ? 1 : 0;
+    const dex = DEX_TABLE[clampInt(effectiveScore("dex"))];
+    const dexDesc = dex.acAdj[0];
+    const dexAsc = dex.acAdj[1];
+    return {
+      descending: armorDesc + shieldDesc + dexDesc,
+      ascending: armorAsc + shieldAsc + dexAsc,
+    };
+  }
+
+  // ---------- XP-driven level ----------
+  // Level is derived from XP against the class's own threshold table
+  // (LEVEL_ADV[class].rows[i].xp) rather than set directly — the highest
+  // level whose XP requirement is met.
+  function levelFromXP(className, xp) {
+    const rows = (LEVEL_ADV[className] || LEVEL_ADV["Fighter"]).rows;
+    let lvl = 1;
+    for (let i = 0; i < rows.length; i++) {
+      if (xp >= rows[i].xp) lvl = i + 1;
+      else break;
+    }
+    return lvl;
+  }
+
   // ---------- rendering ----------
 
   const abilities = [
@@ -996,13 +1136,20 @@
     { key: "cha", label: "CHA" },
   ];
 
-  const state = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, charClass: "Fighter", level: 1, ancestry: "Human", hpRolls: [] };
+  const state = {
+    str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
+    charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
+    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: false,
+  };
 
   const sheetEl = document.getElementById("sheet");
   const ancestrySelect = document.getElementById("charAncestry");
   const classSelect = document.getElementById("charClass");
-  const levelInput = document.getElementById("charLevel");
+  const xpInput = document.getElementById("xpInput");
   const acMaxInput = document.getElementById("acMax");
+  const armorSelect = document.getElementById("armorSelect");
+  const shieldCheckbox = document.getElementById("shieldCheckbox");
+  const currentHPInput = document.getElementById("currentHPInput");
 
   for (const anc of Object.keys(ANCESTRY)) {
     const opt = document.createElement("option");
@@ -1020,6 +1167,14 @@
   }
   classSelect.value = state.charClass;
   updateClassOptions();
+
+  for (const a of Object.keys(ARMOR_TABLE)) {
+    const opt = document.createElement("option");
+    opt.value = a;
+    opt.textContent = a;
+    armorSelect.appendChild(opt);
+  }
+  armorSelect.value = state.armor;
 
   function isFighterType() {
     return FIGHTER_TYPE_CLASSES.has(state.charClass);
@@ -1174,20 +1329,39 @@
   ancestrySelect.addEventListener("change", () => {
     state.ancestry = ancestrySelect.value;
     const switched = updateClassOptions();
-    recompute(switched ? ["ancestry", "charClass"] : ["ancestry"]);
+    if (switched) state.level = levelFromXP(state.charClass, state.xp);
+    recompute(switched ? ["ancestry", "charClass", "level"] : ["ancestry"]);
     persist();
   });
   classSelect.addEventListener("change", () => {
     state.charClass = classSelect.value;
-    recompute(["charClass"]);
+    // XP thresholds differ per class, so level is re-derived under the new
+    // class's table rather than carried over from the old one.
+    state.level = levelFromXP(state.charClass, state.xp);
+    recompute(["charClass", "level"]);
     persist();
   });
-  levelInput.addEventListener("input", () => {
-    state.level = parseInt(levelInput.value, 10) || 1;
-    recompute(["level"]);
+  xpInput.addEventListener("input", () => {
+    state.xp = Math.max(0, parseInt(xpInput.value, 10) || 0);
+    state.level = levelFromXP(state.charClass, state.xp);
+    recompute(["xp", "level"]);
     persist();
   });
   acMaxInput.addEventListener("input", () => recompute(["acMax"]));
+  armorSelect.addEventListener("change", () => {
+    state.armor = armorSelect.value;
+    recompute(["armor"]);
+    persist();
+  });
+  shieldCheckbox.addEventListener("change", () => {
+    state.shield = shieldCheckbox.checked;
+    recompute(["shield"]);
+    persist();
+  });
+  currentHPInput.addEventListener("input", () => {
+    state.currentHP = currentHPInput.value === "" ? null : (parseInt(currentHPInput.value, 10) || 0);
+    persist();
+  });
 
   // ---------- Combat Rolls (ascending AC formula, 1.4.2.4A) ----------
 
@@ -1326,6 +1500,8 @@
 
   function renderHP() {
     const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
+    document.getElementById("levelDisplay").textContent = lvl;
+
     const cap = hdCapLevel(state.charClass);
     const rolledLevels = Math.min(lvl, cap);
 
@@ -1341,6 +1517,13 @@
     const grandTotal = rolledSum + conTotal + flatBonus;
 
     document.getElementById("hpTotal").textContent = grandTotal;
+
+    // Current HP is a free-standing tracker the player edits directly once
+    // it exists; it only auto-initialises to the Max HP the first time a
+    // total becomes available (state.currentHP still null), so levelling
+    // up later never silently overwrites damage already being tracked.
+    if (state.currentHP === null && grandTotal > 0) state.currentHP = grandTotal;
+    currentHPInput.value = state.currentHP === null ? "" : state.currentHP;
 
     const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
     let inputsHtml = "";
@@ -1365,6 +1548,16 @@
     if (flatBonus > 0) parts.push(`fixed post-cap bonus: +${flatBonus}`);
     document.getElementById("hpBreakdown").textContent =
       parts.length ? parts.join("  •  ") : "Enter this level's hit die roll below.";
+  }
+
+  // ---------- Armour Class rendering ----------
+
+  function renderAC() {
+    const ac = computeAC();
+    document.getElementById("acAscDisplay").textContent = ac.ascending;
+    document.getElementById("acDescDisplay").textContent = ac.descending;
+    document.getElementById("acNote").textContent =
+      `${state.armor}${state.shield ? " + shield" : ""}, DEX-adjusted. Ascending AC is what the Combat Rolls table below uses.`;
   }
 
   function renderLevelAdv() {
@@ -1412,7 +1605,8 @@
   // recomputeAll() instead of a hand-written list).
   const RENDERERS = [
     { fn: render,          deps: new Set(["str", "dex", "con", "int", "wis", "cha", "ancestry"]) },
-    { fn: renderHP,        deps: new Set(["con", "charClass", "level", "ancestry", "hpRolls"]) },
+    { fn: renderHP,        deps: new Set(["con", "charClass", "level", "xp", "ancestry", "hpRolls"]) },
+    { fn: renderAC,        deps: new Set(["dex", "armor", "shield"]) },
     { fn: renderCombat,    deps: new Set(["str", "dex", "charClass", "level", "acMax"]) },
     { fn: renderSaves,     deps: new Set(["charClass", "level"]) },
     { fn: renderTurning,   deps: new Set(["charClass", "level"]) },
@@ -1436,7 +1630,9 @@
     ancestrySelect.value = state.ancestry;
     updateClassOptions();
     classSelect.value = state.charClass;
-    levelInput.value = state.level;
+    xpInput.value = state.xp;
+    armorSelect.value = state.armor;
+    shieldCheckbox.checked = state.shield;
   }
 
   // ---------- JSON Export / Import ----------
