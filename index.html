@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OSRIC 3.0 — Ability Reckoner</title>
+<style>
+  :root {
+    --paper: #ece7da;
+    --paper-dim: #ddd6c4;
+    --ink: #26221b;
+    --ink-soft: #5a5346;
+    --rule: #c9c0aa;
+    --accent: #3d6b5c;
+    --accent-soft: #d8e4de;
+    --warn: #8a3b2b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 13px;
+  }
+  body { padding: 10px 12px 24px; max-width: 420px; margin: 0 auto; }
+
+  h1 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin: 0 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  h1 .tag { font-size: 0.65rem; font-weight: 400; font-style: italic; color: var(--ink-soft); }
+
+  #status {
+    font-size: 0.68rem;
+    padding: 4px 8px;
+    border: 1px solid var(--rule);
+    background: var(--paper-dim);
+    margin-bottom: 8px;
+    border-radius: 2px;
+  }
+  #status.linked { border-color: var(--accent); background: var(--accent-soft); }
+  #status.warn { border-color: var(--warn); color: var(--warn); }
+
+  .flags {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+    align-items: center;
+  }
+  .flags label { display: flex; align-items: center; gap: 4px; }
+  .flags select, .flags input[type=number] {
+    font-family: inherit;
+    font-size: 0.72rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 2px 4px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .flags input[type=number] { width: 40px; }
+  .flags select { max-width: 110px; }
+
+  details {
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  summary {
+    background: var(--paper-dim);
+    padding: 5px 9px;
+    font-weight: 600;
+    font-size: 0.78rem;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▸"; font-size: 0.65rem; color: var(--ink-soft); }
+  details[open] summary::after { content: "▾"; }
+  .panel-body { padding: 6px 9px 8px; }
+
+  .ability-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+    flex-wrap: nowrap;
+  }
+  .ability-row:first-child { border-top: none; }
+  .ab-name {
+    width: 26px;
+    flex: 0 0 26px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
+  .ab-input {
+    width: 46px;
+    flex: 0 0 46px;
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: 0.82rem;
+    text-align: right;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 2px 4px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .ab-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .eff-badge {
+    flex: 0 0 auto;
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .eff-badge b { color: var(--ink); font-size: 0.82rem; }
+  .eff-badge.out-of-range { color: var(--warn); }
+  .eff-badge.out-of-range b { color: var(--warn); }
+  .ab-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 6px;
+    font-size: 0.66rem;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .ab-chips b { color: var(--ink); font-family: "SF Mono", "Courier New", monospace; font-weight: 600; }
+
+  .legend {
+    font-size: 0.63rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    padding-top: 5px;
+    border-top: 1px solid var(--rule);
+    margin-top: 3px;
+  }
+
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.68rem;
+  }
+  table.matrix th, table.matrix td {
+    border-top: 1px solid var(--rule);
+    border-left: 1px solid var(--rule);
+    padding: 3px 4px;
+    text-align: center;
+  }
+  table.matrix th:first-child, table.matrix td:first-child {
+    border-left: none;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  table.matrix thead th {
+    border-top: none;
+    background: var(--paper-dim);
+    font-weight: 600;
+    font-family: "SF Mono", "Courier New", monospace;
+  }
+  table.matrix td.hit-any { color: var(--accent); font-weight: 700; }
+  table.matrix td.hit-nat20 { color: var(--warn); font-style: italic; font-size: 0.62rem; }
+  table.matrix td.hit-never { color: var(--ink-soft); }
+  .matrix-scroll { overflow-x: auto; }
+  .combat-range {
+    font-size: 0.66rem;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .bthb-note {
+    font-size: 0.63rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    padding-top: 5px;
+  }
+
+  footer {
+    margin-top: 10px;
+    font-size: 0.62rem;
+    color: var(--ink-soft);
+    border-top: 1px solid var(--rule);
+    padding-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ability Reckoner <span class="tag">OSRIC 3.0 · POC</span></h1>
+
+<div id="status">Checking for Owlbear Rodeo…</div>
+
+<div class="flags">
+  <label>Ancestry <select id="charAncestry"></select></label>
+  <label>Class <select id="charClass"></select></label>
+  <label>Lvl <input type="number" id="charLevel" min="1" max="20" value="1" /></label>
+</div>
+
+<details open>
+  <summary>Ability Scores</summary>
+  <div class="panel-body" id="sheet"></div>
+</details>
+
+<details>
+  <summary>
+    Combat Rolls
+    <span class="combat-range">to AC <input type="number" id="acMax" min="11" max="40" value="25" /></span>
+  </summary>
+  <div class="panel-body">
+    <div class="matrix-scroll">
+      <table class="matrix" id="combatMatrix"></table>
+    </div>
+    <div class="bthb-note" id="bthbNote"></div>
+  </div>
+</details>
+
+<footer>
+  Ability tables: Player Guide 1.1.2–1.1.7. Combat: Ascending AC formula (1.4.2.4A),
+  d20 + BTHB + ability To-Hit ≥ AC; nat 20 always +5. Class/level saves (Aimed Magic
+  Items, Breath Weapons, Death/Paralysis/Poison, Petrification/Polymorph, Spells) —
+  not calculated here.
+</footer>
+
+<script type="module">
+  // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
+
+  // TABLE 1.1.2A: STRENGTH
+  const STR_TABLE = [
+    { max: 3,     toHit: -3, dmg: -1, enc: 0,   minor: "1",                         major: 0 },
+    { max: 5,     toHit: -2, dmg: -1, enc: 10,  minor: "1",                         major: 0 },
+    { max: 7,     toHit: -1, dmg: 0,  enc: 20,  minor: "1",                         major: 0 },
+    { max: 9,     toHit: 0,  dmg: 0,  enc: 35,  minor: "1–2",                       major: 1 },
+    { max: 11,    toHit: 0,  dmg: 0,  enc: 35,  minor: "1–2",                       major: 2 },
+    { max: 13,    toHit: 0,  dmg: 0,  enc: 45,  minor: "1–2",                       major: 4 },
+    { max: 15,    toHit: 0,  dmg: 0,  enc: 55,  minor: "1–2",                       major: 7 },
+    { max: 16,    toHit: 0,  dmg: 1,  enc: 70,  minor: "1–3",                       major: 10 },
+    { max: 17,    toHit: 1,  dmg: 1,  enc: 85,  minor: "1–3",                       major: 13 },
+    { max: 18,    toHit: 1,  dmg: 2,  enc: 110, minor: "1–3",                       major: 16 },
+    { max: 18.50, toHit: 1,  dmg: 3,  enc: 135, minor: "1–3",                       major: 20 },
+    { max: 18.75, toHit: 2,  dmg: 3,  enc: 160, minor: "1–4",                       major: 25 },
+    { max: 18.90, toHit: 2,  dmg: 4,  enc: 185, minor: "1–4",                       major: 30 },
+    { max: 18.99, toHit: 2,  dmg: 5,  enc: 235, minor: "1–4 (1-in-6 exceptional)",  major: 35 },
+    { max: 19,    toHit: 3,  dmg: 6,  enc: 300, minor: "1–5 (2-in-6 exceptional)",  major: 40 },
+  ];
+
+  // TABLE 1.1.3A: DEXTERITY  (acAdj is [descending, ascending])
+  const DEX_TABLE = {
+    3:  { surprise: -3, missileHit: -3, initiative: "+3 seg", acAdj: [4, -4],  agility: -4 },
+    4:  { surprise: -2, missileHit: -2, initiative: "+2 seg", acAdj: [3, -3],  agility: -3 },
+    5:  { surprise: -1, missileHit: -1, initiative: "+1 seg", acAdj: [2, -2],  agility: -2 },
+    6:  { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [1, -1],  agility: -1 },
+    7:  { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    8:  { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    9:  { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    10: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    11: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    12: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    13: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    14: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [0, 0],   agility: 0 },
+    15: { surprise: 0,  missileHit: 0,  initiative: "—",      acAdj: [-1, 1],  agility: 1 },
+    16: { surprise: 1,  missileHit: 1,  initiative: "-1 seg", acAdj: [-2, 2],  agility: 2 },
+    17: { surprise: 2,  missileHit: 2,  initiative: "-2 seg", acAdj: [-3, 3],  agility: 3 },
+    18: { surprise: 3,  missileHit: 3,  initiative: "-3 seg", acAdj: [-4, 4],  agility: 4 },
+    19: { surprise: 3,  missileHit: 3,  initiative: "-3 seg", acAdj: [-4, 4],  agility: 4 },
+  };
+
+  // TABLE 1.1.4A: CONSTITUTION  (hp is [normal, fighter-type])
+  const CON_TABLE = {
+    3:  { hp: [-2, -2], resurrection: 40,  shock: 35 },
+    4:  { hp: [-1, -1], resurrection: 45,  shock: 40 },
+    5:  { hp: [-1, -1], resurrection: 50,  shock: 45 },
+    6:  { hp: [-1, -1], resurrection: 55,  shock: 50 },
+    7:  { hp: [0, 0],   resurrection: 60,  shock: 55 },
+    8:  { hp: [0, 0],   resurrection: 65,  shock: 60 },
+    9:  { hp: [0, 0],   resurrection: 70,  shock: 65 },
+    10: { hp: [0, 0],   resurrection: 75,  shock: 70 },
+    11: { hp: [0, 0],   resurrection: 80,  shock: 75 },
+    12: { hp: [0, 0],   resurrection: 85,  shock: 80 },
+    13: { hp: [0, 0],   resurrection: 90,  shock: 85 },
+    14: { hp: [0, 0],   resurrection: 92,  shock: 88 },
+    15: { hp: [1, 1],   resurrection: 94,  shock: 91 },
+    16: { hp: [2, 2],   resurrection: 96,  shock: 95 },
+    17: { hp: [2, 3],   resurrection: 98,  shock: 97 },
+    18: { hp: [2, 4],   resurrection: 100, shock: 99 },
+    19: { hp: [2, 5],   resurrection: 100, shock: 99 },
+  };
+
+  // TABLE 1.1.5A: INTELLIGENCE
+  const INT_TABLE = { 3:0,4:0,5:0,6:0,7:0,8:1,9:1,10:2,11:2,12:3,13:3,14:4,15:4,16:5,17:6,18:7,19:8 };
+
+  // TABLE 1.1.6A: WISDOM
+  const WIS_TABLE = { 3:-3,4:-2,5:-1,6:-1,7:-1,8:0,9:0,10:0,11:0,12:0,13:0,14:0,15:1,16:2,17:3,18:4,19:5 };
+
+  // TABLE 1.1.7A: CHARISMA
+  const CHA_TABLE = {
+    3:  { sidekick: 1,  loyalty: -30, reaction: -25 },
+    4:  { sidekick: 1,  loyalty: -25, reaction: -20 },
+    5:  { sidekick: 2,  loyalty: -20, reaction: -15 },
+    6:  { sidekick: 2,  loyalty: -15, reaction: -10 },
+    7:  { sidekick: 3,  loyalty: -10, reaction: -5 },
+    8:  { sidekick: 3,  loyalty: -5,  reaction: 0 },
+    9:  { sidekick: 4,  loyalty: 0,   reaction: 0 },
+    10: { sidekick: 4,  loyalty: 0,   reaction: 0 },
+    11: { sidekick: 4,  loyalty: 0,   reaction: 0 },
+    12: { sidekick: 5,  loyalty: 0,   reaction: 0 },
+    13: { sidekick: 5,  loyalty: 0,   reaction: 5 },
+    14: { sidekick: 6,  loyalty: 5,   reaction: 10 },
+    15: { sidekick: 7,  loyalty: 15,  reaction: 15 },
+    16: { sidekick: 8,  loyalty: 20,  reaction: 25 },
+    17: { sidekick: 10, loyalty: 30,  reaction: 30 },
+    18: { sidekick: 15, loyalty: 40,  reaction: 35 },
+    19: { sidekick: 20, loyalty: 50,  reaction: 40 },
+  };
+
+  // BASE TO HIT BONUS LEVELS 1-20 (Player Guide, Combat / Ascending AC section).
+  // null = "N/A" in the book — treated here as "stops advancing, holds last value"
+  // (an assumption, not confirmed against the combat chapter itself).
+  const FIGHTER_PROGRESSION = [0,1,2,3,4,5,6,7,8,9, 10,11,12,13,14,15,16,17,18,19];
+  const CLERIC_PROGRESSION  = [0,0,0,2,2,2,4,4,4,6, 6,6,8,8,8,10,10,10,11,11];
+  const WIZARD_PROGRESSION  = [-1,-1,-1,-1,-1,1,1,1,1,1, 3,3,3,3,3,5,5,5,5,5];
+
+  const BTHB = {
+    "Fighter":     FIGHTER_PROGRESSION,
+    "Paladin":     FIGHTER_PROGRESSION,
+    "Ranger":      FIGHTER_PROGRESSION,
+    "Cleric":      CLERIC_PROGRESSION,
+    "Druid":       [0,0,0,2,2,2,4,4,4,6, 6,6,8,8, null,null,null,null,null,null],
+    "Magic-User":  WIZARD_PROGRESSION,
+    "Illusionist": WIZARD_PROGRESSION,
+    "Thief":       [-1,-1,-1,-1,1,1,1,1,4,4, 4,4,6,6,6,6,8,8,8,8],
+    "Assassin":    [-1,-1,-1,-1,1,1,1,1,4,4, 4,4,6,6,6, null,null,null,null,null],
+    "Monk":        [0,0,0,2,2,2,4,4,4,6, 6,6,8,8,8,10,10,null,null,null],
+  };
+
+  const FIGHTER_TYPE_CLASSES = new Set(["Fighter", "Paladin", "Ranger"]);
+
+  // TABLE 1.2.0A + 1.2.x.1: ancestry ability adjustments and required ranges
+  // (Chapter Two: Ancestry). Human is the unmodified baseline (3-18 all abilities,
+  // not printed as its own row in Table 1.2.0a since it has no restriction).
+  const ANCESTRY = {
+    "Human":    { adj: {},                                   range: { str:[3,18], dex:[3,18], con:[3,18], int:[3,18], wis:[3,18], cha:[3,18] } },
+    "Dwarf":    { adj: { con: 1, cha: -1 },                   range: { str:[8,18], dex:[3,17], con:[12,19], int:[3,18], wis:[3,18], cha:[3,16] } },
+    "Elf":      { adj: { dex: 1, con: -1 },                   range: { str:[3,18], dex:[7,19], con:[6,18],  int:[8,18], wis:[3,18], cha:[8,18] } },
+    "Gnome":    { adj: {},                                   range: { str:[6,18], dex:[3,18], con:[8,18],  int:[7,18], wis:[3,18], cha:[3,18] } },
+    "Half-Elf": { adj: {},                                   range: { str:[3,18], dex:[6,18], con:[6,18],  int:[4,18], wis:[3,18], cha:[3,18] } },
+    "Half-Orc": { adj: { str: 1, con: 1, cha: -2 },           range: { str:[6,18], dex:[3,17], con:[13,19], int:[3,17], wis:[3,14], cha:[3,12] } },
+    "Halfling": { adj: { dex: 1, str: -1 },                   range: { str:[6,17], dex:[8,18], con:[10,19], int:[6,18], wis:[3,17], cha:[3,18] } },
+  };
+
+  const ANCESTRY_CLASSES = {
+    // 1.2.x.3 sections: which single classes an ancestry can take (as itself
+    // or as a component of an allowed multiclass combo — this sheet doesn't
+    // yet model multiclassing itself, just which classes are on the table).
+    "Human":    new Set(["Assassin","Cleric","Druid","Fighter","Illusionist","Magic-User","Monk","Paladin","Ranger","Thief"]),
+    "Dwarf":    new Set(["Assassin","Cleric","Fighter","Thief"]),
+    "Elf":      new Set(["Assassin","Cleric","Fighter","Magic-User","Thief"]),
+    "Gnome":    new Set(["Assassin","Cleric","Fighter","Illusionist","Thief"]),
+    "Half-Elf": new Set(["Assassin","Cleric","Druid","Fighter","Magic-User","Ranger","Thief"]),
+    "Half-Orc": new Set(["Assassin","Cleric","Fighter","Thief"]),
+    "Halfling": new Set(["Fighter","Druid","Thief"]),
+  };
+
+  function bthbFor(className, level) {
+    const arr = BTHB[className] || FIGHTER_PROGRESSION;
+    const idx = Math.max(1, Math.min(20, Math.round(level))) - 1;
+    if (arr[idx] !== null) return { value: arr[idx], capped: false };
+    for (let i = idx; i >= 0; i--) {
+      if (arr[i] !== null) return { value: arr[i], capped: true };
+    }
+    return { value: 0, capped: true };
+  }
+
+  function strRow(score) {
+    const s = Math.max(3, Math.min(19, score));
+    return STR_TABLE.find(r => s <= r.max) || STR_TABLE[STR_TABLE.length - 1];
+  }
+  function clampInt(v) { return Math.max(3, Math.min(19, Math.round(v))); }
+  const sign = n => (n > 0 ? `+${n}` : `${n}`);
+
+  // ---------- rendering ----------
+
+  const abilities = [
+    { key: "str", label: "STR" },
+    { key: "dex", label: "DEX" },
+    { key: "con", label: "CON" },
+    { key: "int", label: "INT" },
+    { key: "wis", label: "WIS" },
+    { key: "cha", label: "CHA" },
+  ];
+
+  const state = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, charClass: "Fighter", level: 1, ancestry: "Human" };
+
+  const sheetEl = document.getElementById("sheet");
+  const ancestrySelect = document.getElementById("charAncestry");
+  const classSelect = document.getElementById("charClass");
+  const levelInput = document.getElementById("charLevel");
+  const acMaxInput = document.getElementById("acMax");
+
+  for (const anc of Object.keys(ANCESTRY)) {
+    const opt = document.createElement("option");
+    opt.value = anc;
+    opt.textContent = anc;
+    ancestrySelect.appendChild(opt);
+  }
+  ancestrySelect.value = state.ancestry;
+
+  for (const cls of Object.keys(BTHB)) {
+    const opt = document.createElement("option");
+    opt.value = cls;
+    opt.textContent = cls;
+    classSelect.appendChild(opt);
+  }
+  classSelect.value = state.charClass;
+  updateClassOptions();
+
+  function isFighterType() {
+    return FIGHTER_TYPE_CLASSES.has(state.charClass);
+  }
+
+  // ---------- ancestry / effective-score resolution ----------
+  // Base score = what you rolled. Effective score = base + ancestral adjustment,
+  // which is what every table lookup (and combat math) actually uses. Table 1.2.0a's
+  // required-range check runs against the effective score, per the book's own order
+  // of operations (roll first, then apply ancestral bonuses, then check the range).
+
+  function ancestryAdj(key) {
+    return ANCESTRY[state.ancestry]?.adj[key] || 0;
+  }
+  function ancestryRange(key) {
+    return ANCESTRY[state.ancestry]?.range[key] || [3, 19];
+  }
+  function effectiveScore(key) {
+    return state[key] + ancestryAdj(key);
+  }
+  function inRange(key) {
+    const [lo, hi] = ancestryRange(key);
+    const eff = effectiveScore(key);
+    return eff >= lo && eff <= hi;
+  }
+
+  function chipsFor(key, rawScore) {
+    if (key === "str") {
+      const row = strRow(rawScore);
+      return [
+        ["Hit", sign(row.toHit)], ["Dmg", sign(row.dmg)], ["Enc", `${row.enc}#`],
+        ["Minor", row.minor], ["Major", `${row.major}%`],
+      ];
+    }
+    const s = clampInt(rawScore);
+    if (key === "dex") {
+      const r = DEX_TABLE[s];
+      return [
+        ["Sur", sign(r.surprise)], ["Mis", sign(r.missileHit)], ["Init", r.initiative],
+        ["AC±", `${sign(r.acAdj[0])}/${sign(r.acAdj[1])}`], ["Agi", sign(r.agility)],
+      ];
+    }
+    if (key === "con") {
+      const r = CON_TABLE[s];
+      const hp = isFighterType() ? r.hp[1] : r.hp[0];
+      return [["HP", sign(hp)], ["Res", `≤${r.resurrection}%`], ["Shock", `≤${r.shock}%`]];
+    }
+    if (key === "int") return [["Lang", `${INT_TABLE[s]}`]];
+    if (key === "wis") return [["Ment", sign(WIS_TABLE[s])]];
+    if (key === "cha") {
+      const r = CHA_TABLE[s];
+      return [["Hench", `${r.sidekick}`], ["Loy", sign(r.loyalty)], ["Rxn", sign(r.reaction)]];
+    }
+    return [];
+  }
+
+  function render() {
+    sheetEl.innerHTML = "";
+    for (const a of abilities) {
+      const row = document.createElement("div");
+      row.className = "ability-row";
+
+      const name = document.createElement("div");
+      name.className = "ab-name";
+      name.textContent = a.label;
+      row.appendChild(name);
+
+      const input = document.createElement("input");
+      input.className = "ab-input";
+      input.type = "number";
+      input.min = "3";
+      input.max = "19";
+      input.step = a.key === "str" ? "0.01" : "1";
+      input.value = state[a.key];
+      input.title = "Base (rolled) score";
+      input.addEventListener("input", () => {
+        const v = parseFloat(input.value);
+        state[a.key] = isNaN(v) ? 10 : v;
+        renderEffBadge(row, a.key);
+        renderChips(row, a.key);
+        if (a.key === "str" || a.key === "dex") renderCombat();
+        persist();
+      });
+      row.appendChild(input);
+
+      const effBadge = document.createElement("span");
+      effBadge.className = "eff-badge";
+      row.appendChild(effBadge);
+
+      const chips = document.createElement("div");
+      chips.className = "ab-chips";
+      row.appendChild(chips);
+
+      sheetEl.appendChild(row);
+      renderEffBadge(row, a.key);
+      renderChips(row, a.key);
+    }
+    const legend = document.createElement("div");
+    legend.className = "legend";
+    const adjParts = abilities
+      .map(a => [a.label, ancestryAdj(a.key)])
+      .filter(([, v]) => v !== 0)
+      .map(([label, v]) => `${sign(v)} ${label}`);
+    const adjText = adjParts.length ? adjParts.join(", ") : "no ability adjustments";
+    const allowedClasses = [...(ANCESTRY_CLASSES[state.ancestry] || [])].join(", ");
+    legend.textContent = `${state.ancestry}: ${adjText}. Available classes: ${allowedClasses}. Fighter-types (Fighter/Paladin/Ranger) get STR's exceptional-% rows past 18 and CON's higher HP bonus at 17–19; other classes cap at plain 18 STR. Scores in red are outside ${state.ancestry}'s allowed range after ancestry adjustment.`;
+    sheetEl.appendChild(legend);
+  }
+
+  function renderEffBadge(row, key) {
+    const badge = row.querySelector(".eff-badge");
+    const eff = effectiveScore(key);
+    const [lo, hi] = ancestryRange(key);
+    const ok = inRange(key);
+    badge.classList.toggle("out-of-range", !ok);
+    const adj = ancestryAdj(key);
+    const adjText = adj !== 0 ? ` (${sign(adj)})` : "";
+    badge.innerHTML = `→ <b>${eff}</b>${adjText}${ok ? "" : ` <span title="Allowed range: ${lo}\u2013${hi}">⚠</span>`}`;
+  }
+
+  function renderChips(row, key) {
+    const wrap = row.querySelector(".ab-chips");
+    wrap.innerHTML = "";
+    let eff = effectiveScore(key);
+    if (key === "str" && !isFighterType() && eff > 18) eff = 18;
+    for (const [label, value] of chipsFor(key, eff)) {
+      const span = document.createElement("span");
+      span.className = "chip";
+      span.title = label;
+      span.innerHTML = `${label} <b>${value}</b>`;
+      wrap.appendChild(span);
+    }
+  }
+
+  function updateClassOptions() {
+    const allowed = ANCESTRY_CLASSES[state.ancestry] || ANCESTRY_CLASSES["Human"];
+    let switched = false;
+    for (const opt of classSelect.options) {
+      const ok = allowed.has(opt.value);
+      opt.disabled = !ok;
+      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.ancestry})`;
+    }
+    if (!allowed.has(state.charClass)) {
+      const fallback = [...allowed][0] || "Fighter";
+      state.charClass = fallback;
+      classSelect.value = fallback;
+      switched = true;
+    }
+    return switched;
+  }
+
+  ancestrySelect.addEventListener("change", () => {
+    state.ancestry = ancestrySelect.value;
+    const switched = updateClassOptions();
+    render();
+    renderCombat();
+    persist();
+  });
+  classSelect.addEventListener("change", () => {
+    state.charClass = classSelect.value;
+    render();
+    renderCombat();
+    persist();
+  });
+  levelInput.addEventListener("input", () => {
+    state.level = parseInt(levelInput.value, 10) || 1;
+    renderCombat();
+    persist();
+  });
+  acMaxInput.addEventListener("input", renderCombat);
+
+  // ---------- Combat Rolls (ascending AC formula, 1.4.2.4A) ----------
+
+  function strToHit() {
+    let eff = effectiveScore("str");
+    if (!isFighterType() && eff > 18) eff = 18;
+    return strRow(eff).toHit;
+  }
+  function dexMissileToHit() {
+    return DEX_TABLE[clampInt(effectiveScore("dex"))].missileHit;
+  }
+
+  function renderCombat() {
+    const acMax = Math.max(11, parseInt(acMaxInput.value, 10) || 25);
+    const acs = [];
+    for (let ac = 10; ac <= acMax; ac++) acs.push(ac);
+
+    const { value: bthb, capped } = bthbFor(state.charClass, state.level);
+    const rows = [
+      { label: "Melee", bonus: bthb + strToHit() },
+      { label: "Missile", bonus: bthb + dexMissileToHit() },
+    ];
+
+    const table = document.getElementById("combatMatrix");
+    let html = "<thead><tr><th>AC→</th>";
+    for (const ac of acs) html += `<th>${ac}</th>`;
+    html += "</tr></thead><tbody>";
+    for (const row of rows) {
+      html += `<tr><td>${row.label}</td>`;
+      for (const ac of acs) {
+        const needed = ac - row.bonus;
+        let cellClass = "", text;
+        if (needed <= 1) { text = "any"; cellClass = "hit-any"; }
+        else if (needed <= 20) { text = `${needed}+`; }
+        else if (needed <= 25) { text = "nat20"; cellClass = "hit-nat20"; }
+        else { text = "—"; cellClass = "hit-never"; }
+        html += `<td class="${cellClass}">${text}</td>`;
+      }
+      html += "</tr>";
+    }
+    html += "</tbody>";
+    table.innerHTML = html;
+
+    const noteEl = document.getElementById("bthbNote");
+    noteEl.textContent = `BTHB ${state.charClass} L${state.level}: ${sign(bthb)}`
+      + (capped ? " (capped — table stops advancing before this level)" : "")
+      + `. "nat20" = only a natural 20 (+5 special rule) clears it.`;
+  }
+
+  render();
+  renderCombat();
+
+  // ---------- Owlbear Rodeo integration (optional) ----------
+
+  const statusEl = document.getElementById("status");
+  const METADATA_KEY = "com.mogadon.osric-ability-reckoner/state";
+  let obr = null;
+  let boundItemId = null;
+
+  async function tryConnectOBR() {
+    try {
+      const mod = await import("https://esm.sh/@owlbear-rodeo/sdk@2");
+      obr = mod.default;
+    } catch (e) {
+      statusEl.textContent = "Standalone mode — SDK not reachable, calculations only, nothing is saved.";
+      statusEl.classList.add("warn");
+      return;
+    }
+    if (!obr.isAvailable) {
+      statusEl.textContent = "Standalone mode (not embedded in Owlbear Rodeo) — calculations only, nothing is saved.";
+      statusEl.classList.add("warn");
+      return;
+    }
+    obr.onReady(async () => {
+      await refreshSelection();
+      obr.player.onChange(refreshSelection);
+    });
+  }
+
+  async function refreshSelection() {
+    const selection = await obr.player.getSelection();
+    if (!selection || selection.length !== 1) {
+      boundItemId = null;
+      statusEl.textContent = "Select exactly one token to link this sheet to it.";
+      statusEl.classList.remove("linked");
+      return;
+    }
+    boundItemId = selection[0];
+    const items = await obr.scene.items.getItems([boundItemId]);
+    const item = items[0];
+    const saved = item?.metadata?.[METADATA_KEY];
+    if (saved) {
+      Object.assign(state, saved);
+      ancestrySelect.value = state.ancestry;
+      classSelect.value = state.charClass;
+      updateClassOptions();
+      levelInput.value = state.level;
+      render();
+      renderCombat();
+    }
+    statusEl.textContent = `Linked: ${item?.name || boundItemId}`;
+    statusEl.classList.add("linked");
+    statusEl.classList.remove("warn");
+  }
+
+  async function persist() {
+    if (!obr || !boundItemId) return;
+    await obr.scene.items.updateItems([boundItemId], (items) => {
+      for (const item of items) {
+        item.metadata[METADATA_KEY] = { ...state };
+      }
+    });
+  }
+
+  tryConnectOBR();
+</script>
+</body>
+</html>
