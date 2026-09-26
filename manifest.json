@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "manifest_version": 1,
   "author": "Mogadon",
-  "description": "Ability-score, ancestry, combat, saving-throw, and level-advancement calculator for OSRIC 3.0 characters, linked to a token's metadata. Includes JSON export/import for moving a character between tokens or rooms.",
+  "description": "OSRIC 3.0 character calculator: abilities, combat, saves, and level advancement, linked to a token.",
   "icon": "https://mogadon-rpg.github.io/osric-ability-reckoner/icon.svg",
   "action": {
     "title": "Ability Reckoner",
