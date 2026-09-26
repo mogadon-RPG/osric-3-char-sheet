@@ -118,7 +118,7 @@
   .ab-head { display: flex; align-items: center; gap: 8px; }
   .ab-head .mv-label { font-size: 0.85rem; }
   .ab-input {
-    width: 58px;
+    width: 72px;
     font-family: "SF Mono", "Courier New", monospace;
     font-size: 1.05rem;
     font-weight: 800;
@@ -1293,12 +1293,17 @@
   function renderEffBadge(row, key) {
     const badge = row.querySelector(".ab-eff");
     const eff = effectiveScore(key);
+    // Percentile STR (18.01–18.99) needs to hold 2 decimal places — plain
+    // JS number-to-string strips trailing zeros (18.20 -> "18.2"), which
+    // reads as if the value changed. Every other ability is always a
+    // whole number, so this only ever applies to STR.
+    const effDisplay = (key === "str" && Math.abs(eff % 1) > 0.001) ? eff.toFixed(2) : eff;
     const [lo, hi] = ancestryRange(key);
     const ok = inRange(key);
     badge.classList.toggle("out-of-range", !ok);
     const adj = ancestryAdj(key);
     const adjText = adj !== 0 ? ` (${sign(adj)})` : "";
-    badge.innerHTML = `→ <b>${eff}</b>${adjText}${ok ? "" : ` <span title="Allowed range: ${lo}\u2013${hi}">⚠</span>`}`;
+    badge.innerHTML = `→ <b>${effDisplay}</b>${adjText}${ok ? "" : ` <span title="Allowed range: ${lo}\u2013${hi}">⚠</span>`}`;
   }
 
   // Full descriptive label for each short chip key, since the Major Value
@@ -1353,10 +1358,20 @@
   });
   classSelect.addEventListener("change", () => {
     state.charClass = classSelect.value;
+    // Percentile STR (18.01-18.99) is a fighter-type-only mechanic — a
+    // non-fighter-type character never had that roll to begin with, so
+    // switching away from Fighter/Paladin/Ranger eliminates it rather than
+    // just hiding it (switching back later starts fresh at plain 18, not
+    // a restored percentile — the roll doesn't come back on its own).
+    let strChanged = false;
+    if (!isFighterType() && state.str > 18) {
+      state.str = 18;
+      strChanged = true;
+    }
     // XP thresholds differ per class, so level is re-derived under the new
     // class's table rather than carried over from the old one.
     state.level = levelFromXP(state.charClass, state.xp);
-    recompute(["charClass", "level"]);
+    recompute(strChanged ? ["charClass", "level", "str"] : ["charClass", "level"]);
     persist();
   });
   xpInput.addEventListener("input", () => {
