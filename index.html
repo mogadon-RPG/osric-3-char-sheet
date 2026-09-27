@@ -258,6 +258,7 @@
   }
   .cc-footer a { color: var(--ink-soft); }
   .version-tag { margin-top: 4px; font-family: "SF Mono", "Courier New", monospace; }
+  .built-by { margin-top: 6px; }
 
   .io-block { margin-bottom: 10px; }
   .io-block:last-child { margin-bottom: 0; }
@@ -647,6 +648,7 @@
   Content and does not represent the views of Mythmere Games LLC or any other
   contributor. This tool's own code is an unofficial fan work by Mogadon and is
   separate from the AELF-governed rules content it displays.
+  <div class="built-by">Built by Anthropic Claude.</div>
   <div class="version-tag" id="versionTag"></div>
 </div>
 
@@ -654,7 +656,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.14.3";
+  const APP_VERSION = "0.15.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1274,6 +1276,29 @@
     "Large (3 foes)",
   ];
 
+  // Armour/shield permitted by class (Player Guide, each class's own
+  // "Armour/Shield Allowed" line, 1.3.x.1). null = no restriction beyond
+  // the rules-wide baseline (every class can always go unarmoured, so
+  // "None" is included in every explicit list below too). Not modelled:
+  // Druid's restriction is specifically to WOODEN shields (no material
+  // distinction exists in the Shield picklist), so Druid shield choice is
+  // left unrestricted here rather than silently misrepresenting a
+  // material rule as a size rule.
+  const CLASS_ARMOR = {
+    "Assassin": ["None", "Leather", "Studded leather"],
+    "Druid": ["None", "Leather"],
+    "Illusionist": ["None"],
+    "Magic-User": ["None"],
+    "Monk": ["None"],
+    "Thief": ["None", "Padded", "Leather", "Studded leather"],
+  };
+  const CLASS_SHIELD = {
+    "Illusionist": ["None"],
+    "Magic-User": ["None"],
+    "Monk": ["None"],
+    "Thief": ["None"],
+  };
+
   // ---------- XP-driven level ----------
   // Level is derived from XP against the class's own threshold table
   // (LEVEL_ADV[class].rows[i].xp) rather than set directly — the highest
@@ -1347,6 +1372,7 @@
     shieldSelect.appendChild(opt);
   }
   shieldSelect.value = state.shield;
+  updateArmorShieldOptions();
 
   function isFighterType() {
     return FIGHTER_TYPE_CLASSES.has(state.charClass);
@@ -1547,12 +1573,45 @@
     }
     return switched;
   }
+  function updateArmorShieldOptions() {
+    const armorAllowed = CLASS_ARMOR[state.charClass] || null;
+    const shieldAllowed = CLASS_SHIELD[state.charClass] || null;
+    let armorSwitched = false, shieldSwitched = false;
+
+    for (const opt of armorSelect.options) {
+      const ok = !armorAllowed || armorAllowed.includes(opt.value);
+      opt.disabled = !ok;
+      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.charClass})`;
+    }
+    if (armorAllowed && !armorAllowed.includes(state.armor)) {
+      state.armor = armorAllowed[0];
+      armorSelect.value = state.armor;
+      armorSwitched = true;
+    }
+
+    for (const opt of shieldSelect.options) {
+      const ok = !shieldAllowed || shieldAllowed.includes(opt.value);
+      opt.disabled = !ok;
+      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.charClass})`;
+    }
+    if (shieldAllowed && !shieldAllowed.includes(state.shield)) {
+      state.shield = shieldAllowed[0];
+      shieldSelect.value = state.shield;
+      shieldSwitched = true;
+    }
+
+    return armorSwitched || shieldSwitched;
+  }
 
   ancestrySelect.addEventListener("change", () => {
     state.ancestry = ancestrySelect.value;
-    const switched = updateClassOptions();
-    if (switched) state.level = levelFromXP(state.charClass, state.xp);
-    recompute(switched ? ["ancestry", "charClass", "level"] : ["ancestry"]);
+    const classSwitched = updateClassOptions();
+    const gearSwitched = updateArmorShieldOptions();
+    if (classSwitched) state.level = levelFromXP(state.charClass, state.xp);
+    const keys = ["ancestry"];
+    if (classSwitched) keys.push("charClass", "level");
+    if (gearSwitched) keys.push("armor", "shield");
+    recompute(keys);
     persist();
   });
   classSelect.addEventListener("change", () => {
@@ -1577,9 +1636,13 @@
     // XP thresholds differ per class, so level is re-derived under the new
     // class's table rather than carried over from the old one.
     state.level = levelFromXP(state.charClass, state.xp);
-    recompute(strChanged
-      ? ["charClass", "level", "str", "hpRolls"]
-      : ["charClass", "level", "hpRolls"]);
+    // Armour/shield choices may no longer be legal for the new class.
+    const gearSwitched = updateArmorShieldOptions();
+    recompute([
+      "charClass", "level", "hpRolls",
+      ...(strChanged ? ["str"] : []),
+      ...(gearSwitched ? ["armor", "shield"] : []),
+    ]);
     persist();
   });
   xpInput.addEventListener("input", () => {
@@ -1950,6 +2013,7 @@
     updateClassOptions();
     classSelect.value = state.charClass;
     xpInput.value = state.xp;
+    updateArmorShieldOptions();
     armorSelect.value = state.armor;
     shieldSelect.value = state.shield;
     gpInput.value = state.gp;
@@ -1960,12 +2024,43 @@
   // OBR item metadata is scoped to one token in one scene and there's no
   // confirmed cross-room persistence to lean on instead (see design notes).
 
-  const SCHEMA_VERSION = 1;
-  const STATE_KEYS = ["str", "dex", "con", "int", "wis", "cha", "charClass", "level", "ancestry"];
+  // External export/import contract. Deliberately separate from the
+  // internal `state` object's own property names (see FIELD_MAP below) so
+  // a future internal rename or refactor can't silently break every
+  // previously-exported character file. Nested and named for direct
+  // Mustache dot-path use (e.g. {{abilities.str}}, {{character.charClass}})
+  // once the template-merge feature gets built -- this shape IS that
+  // contract, not a placeholder for it.
+  const SCHEMA_VERSION = "1.0.0";
+
+  const FIELD_MAP = [
+    ["character.ancestry", "ancestry"],
+    ["character.charClass", "charClass"],
+    ["character.level", "level"],
+    ["character.xp", "xp"],
+    ["abilities.str", "str"], ["abilities.dex", "dex"], ["abilities.con", "con"],
+    ["abilities.int", "int"], ["abilities.wis", "wis"], ["abilities.cha", "cha"],
+    ["combat.armor", "armor"], ["combat.shield", "shield"],
+    ["hitPoints.current", "currentHP"], ["hitPoints.rolls", "hpRolls"],
+    ["wealth.gp", "gp"],
+  ];
+
+  function setPath(obj, path, value) {
+    const parts = path.split(".");
+    let cur = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+      cur[parts[i]] = cur[parts[i]] || {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+  function getPath(obj, path) {
+    return path.split(".").reduce((o, p) => (o == null ? undefined : o[p]), obj);
+  }
 
   function exportState() {
     const payload = { schemaVersion: SCHEMA_VERSION };
-    for (const k of STATE_KEYS) payload[k] = state[k];
+    for (const [ext, key] of FIELD_MAP) setPath(payload, ext, state[key]);
     return JSON.stringify(payload, null, 2);
   }
 
@@ -1973,19 +2068,46 @@
     const errors = [];
     if (obj === null || typeof obj !== "object") return ["Not a JSON object."];
     for (const k of ["str", "dex", "con", "int", "wis", "cha"]) {
-      const v = obj[k];
+      const v = getPath(obj, `abilities.${k}`);
       if (typeof v !== "number" || isNaN(v) || v < 3 || v > 19) {
-        errors.push(`"${k}" must be a number from 3 to 19 (got ${JSON.stringify(v)}).`);
+        errors.push(`"abilities.${k}" must be a number from 3 to 19 (got ${JSON.stringify(v)}).`);
       }
     }
-    if (typeof obj.ancestry !== "string" || !ANCESTRY[obj.ancestry]) {
-      errors.push(`"ancestry" isn't a recognised ancestry (got ${JSON.stringify(obj.ancestry)}).`);
+    const ancestry = getPath(obj, "character.ancestry");
+    if (typeof ancestry !== "string" || !ANCESTRY[ancestry]) {
+      errors.push(`"character.ancestry" isn't a recognised ancestry (got ${JSON.stringify(ancestry)}).`);
     }
-    if (typeof obj.charClass !== "string" || !BTHB[obj.charClass]) {
-      errors.push(`"charClass" isn't a recognised class (got ${JSON.stringify(obj.charClass)}).`);
+    const charClass = getPath(obj, "character.charClass");
+    if (typeof charClass !== "string" || !BTHB[charClass]) {
+      errors.push(`"character.charClass" isn't a recognised class (got ${JSON.stringify(charClass)}).`);
     }
-    if (!Number.isInteger(obj.level) || obj.level < 1 || obj.level > 20) {
-      errors.push(`"level" must be a whole number from 1 to 20 (got ${JSON.stringify(obj.level)}).`);
+    const level = getPath(obj, "character.level");
+    if (!Number.isInteger(level) || level < 1 || level > 20) {
+      errors.push(`"character.level" must be a whole number from 1 to 20 (got ${JSON.stringify(level)}).`);
+    }
+    const xp = getPath(obj, "character.xp");
+    if (typeof xp !== "number" || isNaN(xp) || xp < 0) {
+      errors.push(`"character.xp" must be a non-negative number (got ${JSON.stringify(xp)}).`);
+    }
+    const armor = getPath(obj, "combat.armor");
+    if (typeof armor !== "string" || !ARMOR_TABLE[armor]) {
+      errors.push(`"combat.armor" isn't a recognised armour type (got ${JSON.stringify(armor)}).`);
+    }
+    const shield = getPath(obj, "combat.shield");
+    if (typeof shield !== "string" || !SHIELD_OPTIONS.includes(shield)) {
+      errors.push(`"combat.shield" isn't a recognised shield option (got ${JSON.stringify(shield)}).`);
+    }
+    const currentHP = getPath(obj, "hitPoints.current");
+    if (typeof currentHP !== "number" || isNaN(currentHP)) {
+      errors.push(`"hitPoints.current" must be a number (got ${JSON.stringify(currentHP)}).`);
+    }
+    const rolls = getPath(obj, "hitPoints.rolls");
+    if (!Array.isArray(rolls)) {
+      errors.push(`"hitPoints.rolls" must be an array (got ${JSON.stringify(rolls)}).`);
+    }
+    const gp = getPath(obj, "wealth.gp");
+    if (typeof gp !== "number" || isNaN(gp) || gp < 0) {
+      errors.push(`"wealth.gp" must be a non-negative number (got ${JSON.stringify(gp)}).`);
     }
     return errors;
   }
@@ -2034,7 +2156,7 @@
       importNote.textContent = "Imported.";
       importNote.className = "io-note io-ok";
     }
-    for (const k of STATE_KEYS) state[k] = parsed[k];
+    for (const [ext, key] of FIELD_MAP) state[key] = getPath(parsed, ext);
     syncTopControls();
     recomputeAll();
     persist();
