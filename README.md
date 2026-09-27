@@ -1,4 +1,4 @@
-# OSRIC 3.0 Ability Reckoner — pilot
+# OSRIC 3.0 Character Manager for Owlbear Rodeo
 
 **Reference document:** OSRIC 3.0 Player Guide (`OSRIC_3_0_Player_Guide_FINAL_v_7.pdf`).
 All rules content, tables, and section numbers cited below trace back to
