@@ -330,6 +330,17 @@
   .fact-row .fact-label { color: var(--ink-soft); }
   .fact-row .fact-value { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; }
 
+  .fact-row-note {
+    font-size: 0.7rem;
+    padding: 4px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .fact-row-note:first-child { border-top: none; }
+  .fact-row-note b { color: var(--ink-soft); font-weight: 600; }
+
+  .major-value.mv-xp.xp-capped { border-color: var(--warn); }
+  .major-value.mv-xp.xp-capped .mv-value { color: var(--warn); }
+
   .spell-ladder-title {
     font-size: 0.68rem;
     font-weight: 700;
@@ -584,6 +595,13 @@
   </div>
 </div>
 
+<div class="section" id="spellSlotsDetails">
+  <div class="section-header">Spell Slots <span class="tag" id="spellSlotsTag"></span></div>
+  <div class="panel-body">
+    <div id="spellSlotsBody"></div>
+  </div>
+</div>
+
 <details>
   <summary>Export / Import</summary>
   <div class="panel-body">
@@ -599,6 +617,13 @@
     </div>
   </div>
 </details>
+
+<div class="section" id="notesDetails">
+  <div class="section-header">Notes</div>
+  <div class="panel-body">
+    <div id="notesBody"></div>
+  </div>
+</div>
 
 <details class="legend legend-rollup">
   <summary>Sources</summary>
@@ -629,7 +654,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.13.1";
+  const APP_VERSION = "0.14.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -926,7 +951,7 @@
       ],
     },
     "Druid": {
-      hitDie: "d8", capNote: "Progression as printed stops at level 14.",
+      hitDie: "d8", levelCap: 14, capNote: "Progression as printed stops at level 14.",
       spellLabel: "Druidic Spell Slots by Level", spellCols: [1,2,3,4,5,6,7],
       rows: [
         {xp:0,hd:"1",notes:"—",spells:[2,null,null,null,null,null,null]},
@@ -1012,7 +1037,7 @@
       ],
     },
     "Assassin": {
-      hitDie: "d6", capNote: "Level 15 is the XP ceiling for assassins — excess XP at level 15 is discarded.",
+      hitDie: "d6", levelCap: 15, capNote: "Level 15 is the XP ceiling for assassins — excess XP at level 15 is discarded.",
       rows: [
         {xp:0,hd:"1",notes:"—"},{xp:1500,hd:"2",notes:"—"},{xp:3000,hd:"3",notes:"—"},
         {xp:6000,hd:"4",notes:"Can Hire Assassins (only)"},{xp:12000,hd:"5",notes:"—"},
@@ -1024,7 +1049,7 @@
       ],
     },
     "Monk": {
-      hitDie: "d4", capNote: "Progression as printed stops at level 17.",
+      hitDie: "d4", levelCap: 17, capNote: "Progression as printed stops at level 17.",
       rows: [
         {xp:0,hd:"2",notes:"AC 10 [10]; 1 unarmed attack/round; 1d3 dmg; move 150"},
         {xp:2000,hd:"3",notes:"AC 9 [11]; 1d4 dmg; move 160"},
@@ -1041,8 +1066,7 @@
         {xp:1250000,hd:"14",notes:"AC 0 [20]; 3d6+1 dmg; move 270"},
         {xp:1750000,hd:"15",notes:"AC -1 [21]; 3 attacks/round; 3d6+1 dmg; move 280"},
         {xp:2250000,hd:"16",notes:"AC -1 [21]; 4d6 dmg; move 290"},
-        {xp:2750000,hd:"17",notes:"AC -2 [22]; 4 attacks/round; 5d6 dmg; move 300"},
-        {xp:3250000,hd:"18",notes:"AC -3 [23]; 6d6 dmg; move 310"},
+        {xp:2750000,hd:"17*",notes:"AC -2 [22]; 4 attacks/round; 5d6 dmg; move 300"},
       ],
     },
   };
@@ -1277,7 +1301,7 @@
   const state = {
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
-    hpRolls: [], currentHP: null, armor: "None", shield: "None", gp: 0,
+    hpRolls: [], currentHP: 0, armor: "None", shield: "None", gp: 0,
   };
 
   const sheetEl = document.getElementById("sheet");
@@ -1545,6 +1569,10 @@
     // previous class don't mean anything, so they're cleared rather than
     // just resized to fit.
     state.hpRolls = [];
+    // A class change necessitates rerolling hit dice, so Current HP resets
+    // to 0 rather than carrying over a number that no longer means
+    // anything — silent, no confirmation prompt.
+    state.currentHP = 0;
     // XP thresholds differ per class, so level is re-derived under the new
     // class's table rather than carried over from the old one.
     state.level = levelFromXP(state.charClass, state.xp);
@@ -1575,7 +1603,7 @@
     persist();
   });
   currentHPInput.addEventListener("input", () => {
-    state.currentHP = currentHPInput.value === "" ? null : (parseInt(currentHPInput.value, 10) || 0);
+    state.currentHP = currentHPInput.value === "" ? 0 : (parseInt(currentHPInput.value, 10) || 0);
     persist();
   });
   gpInput.addEventListener("input", () => {
@@ -1683,9 +1711,7 @@
       : `Turning as a level ${clericLvl} cleric.`;
     let html = `<div class="bthb-note">${asNote}</div>`;
     const relevantTypes = TURNING_TABLE.filter(t => t.vals[colIdx] !== "—");
-    if (!relevantTypes.length) {
-      html += `<div class="gate-note">No undead types are affectable yet at this level.</div>`;
-    } else {
+    if (relevantTypes.length) {
       for (const t of relevantTypes) {
         html += `<div class="fact-row"><span class="fact-label">Type ${t.n} — ${t.name}</span><span class="fact-value">${t.vals[colIdx]}</span></div>`;
       }
@@ -1708,9 +1734,6 @@
     const lvl = Math.max(1, Math.min(data.rows.length, Math.round(state.level)));
     const row = data.rows[lvl - 1];
     let html = "";
-    if (Math.round(state.level) > data.rows.length) {
-      html += `<div class="gate-note">This class's printed skill table tops out at level ${data.rows.length} — showing that row.</div>`;
-    }
     data.cols.forEach((label, i) => {
       html += `<div class="fact-row"><span class="fact-label">${label}</span><span class="fact-value">${row[i]}</span></div>`;
     });
@@ -1741,12 +1764,12 @@
 
     document.getElementById("hpTotal").textContent = grandTotal;
 
-    // Current HP is a free-standing tracker the player edits directly once
-    // it exists; it only auto-initialises to the Max HP the first time a
-    // total becomes available (state.currentHP still null), so levelling
-    // up later never silently overwrites damage already being tracked.
-    if (state.currentHP === null && grandTotal > 0) state.currentHP = grandTotal;
-    currentHPInput.value = state.currentHP === null ? "" : state.currentHP;
+    // Current HP is a free-standing tracker the player edits directly.
+    // It does NOT auto-follow Max HP — deliberately: a class change means
+    // hit dice get rerolled, so Current HP is force-reset to 0 (see the
+    // classSelect handler) rather than silently inheriting whatever the
+    // new Max HP total happens to be.
+    currentHPInput.value = state.currentHP === null ? 0 : state.currentHP;
 
     const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
     let inputsHtml = "";
@@ -1795,29 +1818,95 @@
     document.getElementById("levelTag").textContent = `Lvl ${lvl}`;
 
     let html = `<div class="fact-row"><span class="fact-label">Hit Dice (${data.hitDie})</span><span class="fact-value">${row.hd}</span></div>`;
-    if (row.notes && row.notes !== "—") {
-      html += `<div class="fact-row"><span class="fact-label">This level grants</span><span class="fact-value">${row.notes}</span></div>`;
-    }
-    if (data.spellLabel && row.spells) {
-      html += `<div class="spell-ladder-title">${data.spellLabel}</div><div class="spell-ladder">`;
-      row.spells.forEach((s, i) => {
-        html += `<div class="spell-ladder-row"><span>Lv ${data.spellCols[i]}</span><b>${s === null ? "—" : s}</b></div>`;
-      });
-      html += `</div>`;
-    }
     if (nextRow) {
       html += `<div class="fact-row"><span class="fact-label">Next level (${lvl + 1}) at</span><span class="fact-value">${nextRow.xp.toLocaleString()} XP</span></div>`;
-      if (nextRow.notes && nextRow.notes !== "—") {
-        html += `<div class="fact-row"><span class="fact-label">Next level grants</span><span class="fact-value">${nextRow.notes}</span></div>`;
-      }
-    } else {
-      html += `<div class="gate-note">${data.capNote}</div>`;
-    }
-    if (capped) {
-      html += `<div class="gate-note">Selected level ${lvl} is beyond this class's printed table (tops out at ${data.rows.length}) — showing its last row.</div>`;
     }
     document.getElementById("levelBody").innerHTML = html;
+
+    // XP cap red-flag: for classes with a true hard level cap (Assassin,
+    // Druid, Monk — confirmed against the Player Guide, not just an
+    // attack-bonus plateau), any XP entered past the last row's threshold
+    // isn't doing anything mathematically once the printed table's last
+    // row is reached. Checked purely against the XP threshold (not the
+    // displayed level number) — see the Monk level-numbering note flagged
+    // separately; this keeps the flag correct regardless of that.
+    const lastRowXP = data.rows[data.rows.length - 1].xp;
+    const xpBeyondCap = !!data.levelCap && state.xp > lastRowXP;
+    document.querySelector(".major-value.mv-xp").classList.toggle("xp-capped", xpBeyondCap);
   }
+
+  // ---------- Spell Slots rendering (classes with a spellLabel only) ----------
+
+  function renderSpellSlots() {
+    const details = document.getElementById("spellSlotsDetails");
+    const data = LEVEL_ADV[state.charClass];
+    if (!data || !data.spellLabel) {
+      details.style.display = "none";
+      return;
+    }
+    const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
+    const rowIdx = Math.min(lvl, data.rows.length) - 1;
+    const row = data.rows[rowIdx];
+    if (!row.spells) {
+      details.style.display = "none";
+      return;
+    }
+    details.style.display = "";
+    document.getElementById("spellSlotsTag").textContent = `Lvl ${lvl}`;
+    let html = `<div class="spell-ladder-title">${data.spellLabel}</div><div class="spell-ladder">`;
+    row.spells.forEach((s, i) => {
+      html += `<div class="spell-ladder-row"><span>Lv ${data.spellCols[i]}</span><b>${s === null ? "—" : s}</b></div>`;
+    });
+    html += `</div>`;
+    document.getElementById("spellSlotsBody").innerHTML = html;
+  }
+
+  // ---------- Notes rollup (display-only; consolidates scattered gate/grant
+  // notes from Level Advancement, Turning, and Thief Skills so the panels
+  // above stay lean during play) ----------
+
+  function renderNotes() {
+    const parts = [];
+
+    const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
+    const lvlData = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
+    const capped = lvl > lvlData.rows.length;
+    const rowIdx = Math.min(lvl, lvlData.rows.length) - 1;
+    const row = lvlData.rows[rowIdx];
+    const nextRow = capped ? null : lvlData.rows[lvl];
+    if (row.notes && row.notes !== "—") {
+      parts.push(`<b>This level grants:</b> ${row.notes}`);
+    }
+    if (nextRow && nextRow.notes && nextRow.notes !== "—") {
+      parts.push(`<b>Next level grants:</b> ${nextRow.notes}`);
+    }
+    if (!nextRow) {
+      parts.push(lvlData.capNote);
+    }
+    if (capped) {
+      parts.push(`Selected level ${lvl} is beyond this class's printed table (tops out at ${lvlData.rows.length}) — showing its last row.`);
+    }
+
+    const clericLvl = turningClericLevel(state.charClass, lvl);
+    if (clericLvl !== null) {
+      const colIdx = turnColumnIndex(Math.min(clericLvl, 20));
+      const anyAffectable = TURNING_TABLE.some(t => t.vals[colIdx] !== "—");
+      if (!anyAffectable) {
+        parts.push("No undead types are affectable yet at this level.");
+      }
+    }
+
+    const thiefData = THIEF_SKILLS[state.charClass];
+    if (thiefData && Math.round(state.level) > thiefData.rows.length) {
+      parts.push(`This class's printed skill table tops out at level ${thiefData.rows.length} — showing that row.`);
+    }
+
+    const notesEl = document.getElementById("notesBody");
+    notesEl.innerHTML = parts.length
+      ? parts.map(p => `<div class="fact-row-note">${p}</div>`).join("")
+      : `<div class="fact-row-note">Nothing to note at this class/level.</div>`;
+  }
+
 
   // ---------- Dependency-driven render dispatch ----------
   //
@@ -1838,7 +1927,9 @@
     { fn: renderSaves,     deps: new Set(["charClass", "level"]) },
     { fn: renderTurning,   deps: new Set(["charClass", "level"]) },
     { fn: renderThiefSkills, deps: new Set(["charClass", "level"]) },
-    { fn: renderLevelAdv,  deps: new Set(["charClass", "level"]) },
+    { fn: renderLevelAdv,  deps: new Set(["charClass", "level", "xp"]) },
+    { fn: renderSpellSlots, deps: new Set(["charClass", "level"]) },
+    { fn: renderNotes,     deps: new Set(["charClass", "level"]) },
   ];
   function recompute(changedKeys) {
     for (const { fn, deps } of RENDERERS) {
