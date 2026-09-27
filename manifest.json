@@ -1,14 +1,14 @@
 {
   "name": "OSRIC 3.0 Character Sheet",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "manifest_version": 1,
   "author": "Mogadon",
   "description": "OSRIC 3.0 character calculator: abilities, combat, saves, and level advancement, linked to a token.",
-  "icon": "https://mogadon-rpg.github.io/osric-3-char-sheet/icon.svg?v=0.14.2",
+  "icon": "https://mogadon-rpg.github.io/osric-3-char-sheet/icon.svg?v=0.14.3",
   "action": {
     "title": "OSRIC 3.0 Character Sheet",
-    "icon": "https://mogadon-rpg.github.io/osric-3-char-sheet/icon.svg?v=0.14.2",
-    "popover": "https://mogadon-rpg.github.io/osric-3-char-sheet/index.html?v=0.14.2",
+    "icon": "https://mogadon-rpg.github.io/osric-3-char-sheet/icon.svg?v=0.14.3",
+    "popover": "https://mogadon-rpg.github.io/osric-3-char-sheet/index.html?v=0.14.3",
     "width": 440,
     "height": 780
   }

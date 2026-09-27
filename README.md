@@ -116,9 +116,7 @@ its manifest URL:
 `https://mogadon-rpg.github.io/osric-3-char-sheet/manifest.json`.
 Once added, opening it with exactly one token selected links the sheet to
 that token: it reads and writes its ability scores to the token's metadata
-under the key `com.mogadon.osric-ability-reckoner/state` (kept as-is
-despite the rename, so any already-bound tokens don't lose their saved
-data), so scores persist with the token across sessions.
+under the key `com.mogadon.osric-3-char-sheet/state`, so scores persist with the token across sessions.
 
 ## Known rough edges (pilot, not final)
 
