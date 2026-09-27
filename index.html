@@ -367,7 +367,7 @@
     color: var(--accent);
     line-height: 1.15;
   }
-  .major-value.mv-editable { padding: 4px 4px; width: 72px; }
+  .major-value.mv-editable { padding: 4px 4px; }
   .major-value.mv-editable .mv-value {
     border: none;
     background: transparent;
@@ -379,6 +379,26 @@
   .major-value.mv-editable .mv-value::-webkit-outer-spin-button,
   .major-value.mv-editable .mv-value::-webkit-inner-spin-button { margin: 0; }
   .major-value.mv-editable .mv-value:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+
+  /* Fixed to comfortably fit 7 digits (9999999) without the input's
+     percentage width fighting an auto-sized parent (see mv-fill below
+     for why an explicit basis, not just min-width, is what actually
+     fixes that). */
+  .major-value.mv-xp { width: 94px; }
+  /* Grows to soak up whatever room is left in the row. flex-basis: 0
+     (not auto) is the actual fix — with auto, the browser still tries
+     to measure content first and the same oversized-input ballooning
+     from before would reappear before growth kicks in. */
+  .major-value.mv-fill { flex: 1 1 0; min-width: 60px; }
+
+  /* Level is derived from XP, not a direct input — visually flattened
+     so it doesn't read as another editable field. */
+  .major-value.mv-readout {
+    border-color: var(--rule);
+    background: var(--paper-dim);
+  }
+  .major-value.mv-readout .mv-label,
+  .major-value.mv-readout .mv-value { color: var(--ink-soft); }
 
   .mv-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .mv-select {
@@ -441,15 +461,15 @@
 </div>
 
 <div class="mv-row">
-  <div class="major-value">
-    <span class="mv-label">Level</span>
-    <span class="mv-value" id="levelDisplay">1</span>
-  </div>
-  <div class="major-value mv-editable">
+  <div class="major-value mv-editable mv-xp">
     <span class="mv-label">XP</span>
     <input type="number" class="mv-value" id="xpInput" min="0" step="1" value="0" />
   </div>
-  <div class="major-value mv-editable">
+  <div class="major-value mv-readout">
+    <span class="mv-label">Level</span>
+    <span class="mv-value" id="levelDisplay">1</span>
+  </div>
+  <div class="major-value mv-editable mv-fill">
     <span class="mv-label">GP</span>
     <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
   </div>
@@ -598,7 +618,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.12.4";
+  const APP_VERSION = "0.12.5";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
