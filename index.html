@@ -384,7 +384,7 @@
      percentage width fighting an auto-sized parent (see mv-fill below
      for why an explicit basis, not just min-width, is what actually
      fixes that). */
-  .major-value.mv-xp { width: 94px; }
+  .major-value.mv-xp { width: 113px; }
   /* Grows to soak up whatever room is left in the row. flex-basis: 0
      (not auto) is the actual fix — with auto, the browser still tries
      to measure content first and the same oversized-input ballooning
@@ -623,7 +623,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.12.6";
+  const APP_VERSION = "0.12.7";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
