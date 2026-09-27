@@ -23,7 +23,7 @@
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 16px;
   }
-  body { padding: 10px 12px 24px; max-width: 441px; margin: 0 auto; }
+  body { padding: 10px 12px 24px; max-width: 440px; margin: 0 auto; }
 
   h1 {
     font-size: 0.95rem;
@@ -401,6 +401,10 @@
   .major-value.mv-readout .mv-value { color: var(--ink-soft); }
 
   .mv-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  /* Forces everything after it onto a new line, regardless of whether
+     the current line has room left — a zero-height, full-width flex
+     item is the standard way to force a break inside flex-wrap. */
+  .mv-break { flex-basis: 100%; height: 0; }
   .mv-select {
     font-family: inherit;
     font-weight: 700;
@@ -473,6 +477,7 @@
     <span class="mv-label">GP</span>
     <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
   </div>
+  <div class="mv-break"></div>
   <div class="major-value">
     <span class="mv-label">Armour</span>
     <select id="armorSelect" class="mv-select"></select>
@@ -618,7 +623,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.12.5";
+  const APP_VERSION = "0.12.6";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
