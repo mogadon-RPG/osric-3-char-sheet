@@ -201,6 +201,9 @@
     font-style: italic;
     padding: 4px 2px 2px;
   }
+  .legend-rollup { margin-bottom: 8px; }
+  .legend-rollup .legend-body { display: flex; flex-direction: column; gap: 3px; }
+  .legend-rollup .legend-body b { font-style: normal; color: var(--ink); }
 
   table.matrix {
     width: 100%;
@@ -253,6 +256,7 @@
     text-align: center;
   }
   .cc-footer a { color: var(--ink-soft); }
+  .version-tag { margin-top: 4px; font-family: "SF Mono", "Courier New", monospace; }
 
   .io-block { margin-bottom: 10px; }
   .io-block:last-child { margin-bottom: 0; }
@@ -418,7 +422,7 @@
 
 <div class="top-bar">
   <div class="top-left">
-    <h1>CharSheet <span class="tag">OSRIC 3.0 · Pilot</span></h1>
+    <h1>OSRIC 3.0 Character Sheet</h1>
 
     <div id="status">Checking for Owlbear Rodeo…</div>
 
@@ -446,7 +450,7 @@
     <input type="number" class="mv-value" id="xpInput" min="0" step="1" value="0" />
   </div>
   <div class="major-value">
-    <span class="mv-label">AC (asc.)</span>
+    <span class="mv-label">AC</span>
     <span class="mv-value" id="acAscDisplay">10</span>
   </div>
   <!-- AC (descending) removed from the UI — almost nobody was using it.
@@ -460,23 +464,19 @@
     <span class="mv-label">GP</span>
     <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
   </div>
+  <div class="major-value">
+    <span class="mv-label">Armour</span>
+    <select id="armorSelect" class="mv-select"></select>
+  </div>
 </div>
 
 <div class="section">
   <div class="section-header">Armour Class</div>
   <div class="panel-body">
     <div class="ac-row">
-      <div class="ac-control">
-        <label for="armorSelect">Armour</label>
-        <select id="armorSelect"></select>
-      </div>
       <label class="ac-checkbox"><input type="checkbox" id="shieldCheckbox" /> Shield (+1)</label>
     </div>
     <div class="bthb-note" id="acNote"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.4.2.G (armour table), 1.4.2.4A (AC formula).</div>
-    </details>
   </div>
 </div>
 
@@ -484,10 +484,6 @@
   <div class="section-header">Ability Scores</div>
   <div class="panel-body">
     <div id="sheet"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.1.2–1.1.7 (ability tables).</div>
-    </details>
   </div>
 </div>
 
@@ -511,10 +507,6 @@
         <div class="hp-inputs" id="hpInputs"></div>
       </div>
     </details>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.1.4A (Constitution), 1.3.x.4A (hit dice by class/level).</div>
-    </details>
   </div>
 </div>
 
@@ -528,10 +520,6 @@
       <table class="matrix" id="combatMatrix"></table>
     </div>
     <div class="bthb-note" id="bthbNote"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.4.2.4A — Ascending AC formula: d20 + BTHB + ability To-Hit ≥ AC; a natural 20 always adds +5.</div>
-    </details>
   </div>
 </div>
 
@@ -540,10 +528,6 @@
   <div class="panel-body">
     <div class="save-card" id="savesCard"></div>
     <div class="bthb-note" id="savesNote"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.3.x.4B/C.</div>
-    </details>
   </div>
 </div>
 
@@ -551,10 +535,6 @@
   <div class="section-header">Turning the Undead</div>
   <div class="panel-body">
     <div id="turningBody"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.6.5A.</div>
-    </details>
   </div>
 </div>
 
@@ -562,10 +542,6 @@
   <div class="section-header">Thief Skills</div>
   <div class="panel-body">
     <div id="thiefSkillsBody"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.3.x.4B.</div>
-    </details>
   </div>
 </div>
 
@@ -573,10 +549,6 @@
   <div class="section-header">Level Advancement <span class="tag" id="levelTag"></span></div>
   <div class="panel-body">
     <div id="levelBody"></div>
-    <details class="legend">
-      <summary>Source</summary>
-      <div class="legend-body">Player Guide 1.3.x.4A.</div>
-    </details>
   </div>
 </div>
 
@@ -596,6 +568,20 @@
   </div>
 </details>
 
+<details class="legend legend-rollup">
+  <summary>Sources</summary>
+  <div class="legend-body">
+    <div><b>Armour Class</b> — Player Guide 1.4.2.G (armour table), 1.4.2.4A (AC formula).</div>
+    <div><b>Ability Scores</b> — Player Guide 1.1.2–1.1.7 (ability tables).</div>
+    <div><b>Hit Points</b> — Player Guide 1.1.4A (Constitution), 1.3.x.4A (hit dice by class/level).</div>
+    <div><b>Combat Rolls</b> — Player Guide 1.4.2.4A — Ascending AC formula: d20 + BTHB + ability To-Hit ≥ AC; a natural 20 always adds +5.</div>
+    <div><b>Saving Throws</b> — Player Guide 1.3.x.4B/C.</div>
+    <div><b>Turning the Undead</b> — Player Guide 1.6.5A.</div>
+    <div><b>Thief Skills</b> — Player Guide 1.3.x.4B.</div>
+    <div><b>Level Advancement</b> — Player Guide 1.3.x.4A.</div>
+  </div>
+</details>
+
 <div class="cc-footer">
   OSRIC is a trademark of Matthew Finch and Stuart Marshall, used with permission.
   This work includes AELF Open Gaming Content, which may only be used under the
@@ -604,9 +590,16 @@
   Content and does not represent the views of Mythmere Games LLC or any other
   contributor. This tool's own code is an unofficial fan work by Mogadon and is
   separate from the AELF-governed rules content it displays.
+  <div class="version-tag" id="versionTag"></div>
 </div>
 
+
 <script type="module">
+  // Kept in sync by hand with manifest.json's "version" — no build step ties
+  // these together, so bumping one means bumping the other too.
+  const APP_VERSION = "0.11.0";
+  document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
+
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
 
   // TABLE 1.1.2A: STRENGTH
@@ -1535,6 +1528,9 @@
     persist();
   });
   gpInput.addEventListener("input", () => {
+    // Strip leading zeros live (007000 -> 7000), same fix as xpInput.
+    const stripped = gpInput.value.replace(/^0+(?=\d)/, "");
+    if (stripped !== gpInput.value) gpInput.value = stripped;
     state.gp = Math.max(0, parseInt(gpInput.value, 10) || 0);
     persist();
   });
