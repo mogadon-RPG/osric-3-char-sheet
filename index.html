@@ -289,14 +289,26 @@
   .io-note.io-error { color: var(--warn); }
   .io-note.io-ok { color: var(--accent); }
 
-  .save-card {
+  .zone-divider {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
+    align-items: center;
+    text-align: center;
+    margin: 10px 0 8px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
   }
-  .save-item { display: flex; flex-direction: column; min-width: 70px; }
-  .save-item .save-label { font-size: 0.62rem; color: var(--ink-soft); }
-  .save-item .save-value { font-family: "SF Mono", "Courier New", monospace; font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+  .zone-divider::before, .zone-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: 1px solid var(--rule);
+  }
+  .zone-divider span { padding: 0 8px; white-space: nowrap; }
+
+  .dual-col { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dual-col .section { flex: 1 1 190px; margin-bottom: 8px; }
 
   .gate-note {
     font-size: 0.7rem;
@@ -549,11 +561,22 @@
   </div>
 </div>
 
-<div class="section">
-  <div class="section-header">Saving Throws <span class="tag" id="savesTag"></span></div>
-  <div class="panel-body">
-    <div class="save-card" id="savesCard"></div>
-    <div class="bthb-note" id="savesNote"></div>
+<div class="zone-divider"><span>Class &amp; Level Specific</span></div>
+
+<div class="dual-col">
+  <div class="section">
+    <div class="section-header">Saving Throws <span class="tag" id="savesTag"></span></div>
+    <div class="panel-body">
+      <div id="savesCard"></div>
+      <div class="bthb-note" id="savesNote"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">Level Advancement <span class="tag" id="levelTag"></span></div>
+    <div class="panel-body">
+      <div id="levelBody"></div>
+    </div>
   </div>
 </div>
 
@@ -568,13 +591,6 @@
   <div class="section-header">Thief Skills</div>
   <div class="panel-body">
     <div id="thiefSkillsBody"></div>
-  </div>
-</div>
-
-<div class="section">
-  <div class="section-header">Level Advancement <span class="tag" id="levelTag"></span></div>
-  <div class="panel-body">
-    <div id="levelBody"></div>
   </div>
 </div>
 
@@ -623,7 +639,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.12.7";
+  const APP_VERSION = "0.13.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1650,7 +1666,7 @@
     document.getElementById("savesTag").textContent = `Lvl ${lvl}`;
     let html = "";
     for (const [key, label] of cols) {
-      html += `<div class="save-item"><span class="save-label">${label}</span><span class="save-value">${row[key]}</span></div>`;
+      html += `<div class="fact-row"><span class="fact-label">${label}</span><span class="fact-value">${row[key]}</span></div>`;
     }
     document.getElementById("savesCard").innerHTML = html;
 
