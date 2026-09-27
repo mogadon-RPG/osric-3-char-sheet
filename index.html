@@ -449,6 +449,18 @@
     <span class="mv-label">XP</span>
     <input type="number" class="mv-value" id="xpInput" min="0" step="1" value="0" />
   </div>
+  <div class="major-value mv-editable">
+    <span class="mv-label">GP</span>
+    <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
+  </div>
+  <div class="major-value">
+    <span class="mv-label">Armour</span>
+    <select id="armorSelect" class="mv-select"></select>
+  </div>
+  <div class="major-value">
+    <span class="mv-label">Shield</span>
+    <select id="shieldSelect" class="mv-select"></select>
+  </div>
   <div class="major-value">
     <span class="mv-label">AC</span>
     <span class="mv-value" id="acAscDisplay">10</span>
@@ -460,22 +472,11 @@
     <span class="mv-value" id="acDescDisplay">10</span>
   </div>
   -->
-  <div class="major-value mv-editable">
-    <span class="mv-label">GP</span>
-    <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
-  </div>
-  <div class="major-value">
-    <span class="mv-label">Armour</span>
-    <select id="armorSelect" class="mv-select"></select>
-  </div>
 </div>
 
 <div class="section">
   <div class="section-header">Armour Class</div>
   <div class="panel-body">
-    <div class="ac-row">
-      <label class="ac-checkbox"><input type="checkbox" id="shieldCheckbox" /> Shield (+1)</label>
-    </div>
     <div class="bthb-note" id="acNote"></div>
   </div>
 </div>
@@ -597,7 +598,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.11.0";
+  const APP_VERSION = "0.12.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1195,8 +1196,9 @@
     const armor = ARMOR_TABLE[state.armor] || ARMOR_TABLE["None (unarmoured)"];
     const armorDesc = armor.descAC;
     const armorAsc = 20 - armorDesc;
-    const shieldDesc = state.shield ? -1 : 0;
-    const shieldAsc = state.shield ? 1 : 0;
+    const hasShield = state.shield && state.shield !== "None";
+    const shieldDesc = hasShield ? -1 : 0;
+    const shieldAsc = hasShield ? 1 : 0;
     const dex = DEX_TABLE[clampInt(effectiveScore("dex"))];
     const dexDesc = dex.acAdj[0];
     const dexAsc = dex.acAdj[1];
@@ -1205,6 +1207,16 @@
       ascending: armorAsc + shieldAsc + dexAsc,
     };
   }
+
+  // Shield size doesn't change the AC bonus (always flat +1) — it governs
+  // how many attacks per round the shield's bonus can be used against
+  // (Player Guide p.79). Label states the attacker count directly.
+  const SHIELD_OPTIONS = [
+    "None",
+    "Small (1 attacker)",
+    "Medium (2 attackers)",
+    "Large (3 attackers)",
+  ];
 
   // ---------- XP-driven level ----------
   // Level is derived from XP against the class's own threshold table
@@ -1234,7 +1246,7 @@
   const state = {
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
-    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: false, gp: 0,
+    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: "None", gp: 0,
   };
 
   const sheetEl = document.getElementById("sheet");
@@ -1243,7 +1255,7 @@
   const xpInput = document.getElementById("xpInput");
   const acMaxInput = document.getElementById("acMax");
   const armorSelect = document.getElementById("armorSelect");
-  const shieldCheckbox = document.getElementById("shieldCheckbox");
+  const shieldSelect = document.getElementById("shieldSelect");
   const currentHPInput = document.getElementById("currentHPInput");
   const gpInput = document.getElementById("gpInput");
 
@@ -1271,6 +1283,14 @@
     armorSelect.appendChild(opt);
   }
   armorSelect.value = state.armor;
+
+  for (const s of SHIELD_OPTIONS) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s;
+    shieldSelect.appendChild(opt);
+  }
+  shieldSelect.value = state.shield;
 
   function isFighterType() {
     return FIGHTER_TYPE_CLASSES.has(state.charClass);
@@ -1518,8 +1538,8 @@
     recompute(["armor"]);
     persist();
   });
-  shieldCheckbox.addEventListener("change", () => {
-    state.shield = shieldCheckbox.checked;
+  shieldSelect.addEventListener("change", () => {
+    state.shield = shieldSelect.value;
     recompute(["shield"]);
     persist();
   });
@@ -1730,7 +1750,7 @@
     // AC (descending) UI removed — see the commented-out HTML block above.
     // document.getElementById("acDescDisplay").textContent = ac.descending;
     document.getElementById("acNote").textContent =
-      `${state.armor}${state.shield ? " + shield" : ""}, DEX-adjusted. Ascending AC is what the Combat Rolls table below uses.`;
+      `${state.armor}${state.shield && state.shield !== "None" ? ` + ${state.shield.split(" (")[0].toLowerCase()} shield` : ""}, DEX-adjusted. Ascending AC is what the Combat Rolls table below uses.`;
   }
 
   function renderLevelAdv() {
@@ -1808,7 +1828,7 @@
     classSelect.value = state.charClass;
     xpInput.value = state.xp;
     armorSelect.value = state.armor;
-    shieldCheckbox.checked = state.shield;
+    shieldSelect.value = state.shield;
     gpInput.value = state.gp;
   }
 
