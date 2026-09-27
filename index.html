@@ -598,7 +598,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.12.1";
+  const APP_VERSION = "0.12.2";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1180,7 +1180,7 @@
   // regardless of size (large/medium/small differ in cost and how many
   // attacks per round it can block, not in the AC bonus itself).
   const ARMOR_TABLE = {
-    "None (unarmoured)": { descAC: 10 },
+    "None": { descAC: 10 },
     "Padded":            { descAC: 8 },
     "Leather":           { descAC: 8 },
     "Studded leather":   { descAC: 7 },
@@ -1193,7 +1193,7 @@
     "Plate mail":        { descAC: 3 },
   };
   function computeAC() {
-    const armor = ARMOR_TABLE[state.armor] || ARMOR_TABLE["None (unarmoured)"];
+    const armor = ARMOR_TABLE[state.armor] || ARMOR_TABLE["None"];
     const armorDesc = armor.descAC;
     const armorAsc = 20 - armorDesc;
     const hasShield = state.shield && state.shield !== "None";
@@ -1246,7 +1246,7 @@
   const state = {
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
-    hpRolls: [], currentHP: null, armor: "None (unarmoured)", shield: "None", gp: 0,
+    hpRolls: [], currentHP: null, armor: "None", shield: "None", gp: 0,
   };
 
   const sheetEl = document.getElementById("sheet");
