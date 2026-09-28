@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Token data</title>
+<style>
+  :root {
+    --paper: #ece7da; --paper-dim: #ddd6c4; --ink: #26221b; --ink-soft: #5a5346;
+    --rule: #c9c0aa; --accent: #3d6b5c; --warn: #8a3b2b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--paper); color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-size: 13px;
+  }
+  body { padding: 10px 14px 16px; }
+  h1 {
+    font-size: 0.95rem; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--ink);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  h1 .sub { font-size: 0.65rem; font-weight: 400; font-style: italic; color: var(--ink-soft); }
+  h2 { font-size: 0.78rem; margin: 12px 0 4px; }
+  .note { font-size: 0.72rem; color: var(--ink-soft); font-style: italic; }
+  .note.err { color: var(--warn); font-style: normal; }
+  .fact { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid var(--rule); font-size: 0.72rem; }
+  .fact:first-child { border-top: none; }
+  .fact .k { color: var(--ink-soft); }
+  .fact .v { font-family: "SF Mono", "Courier New", monospace; font-weight: 700; text-align: right; word-break: break-all; }
+  pre {
+    margin: 0; padding: 8px; background: #fff; border: 1px solid var(--rule); border-radius: 3px;
+    font-family: "SF Mono", "Courier New", monospace; font-size: 0.68rem; line-height: 1.4;
+    max-height: 190px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  details { margin-top: 12px; }
+  summary { font-size: 0.78rem; font-weight: 600; cursor: pointer; margin-bottom: 4px; }
+  .buttons { display: flex; gap: 8px; margin-top: 14px; }
+  button {
+    font-family: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--accent); border-radius: 3px; background: var(--paper-dim);
+    color: var(--accent); padding: 4px 10px;
+  }
+  button:hover { background: var(--accent); color: var(--paper); }
+</style>
+</head>
+<body>
+
+<h1>Token data <span class="sub">debug inspector</span></h1>
+<div id="msg" class="note">Loading…</div>
+<div id="facts"></div>
+
+<h2>This extension's data on the token</h2>
+<pre id="ours"></pre>
+
+<h2>All metadata (every extension)</h2>
+<pre id="allMeta"></pre>
+
+<details>
+  <summary>Item properties (everything except metadata)</summary>
+  <pre id="props"></pre>
+</details>
+
+<div class="buttons">
+  <button type="button" id="refreshBtn">Refresh</button>
+  <button type="button" id="copyBtn">Copy everything</button>
+  <button type="button" id="closeBtn">Close</button>
+</div>
+
+<script type="module">
+  const MODAL_ID = "com.mogadon.osric-3-char-sheet/token-data-modal";
+  const OUR_KEY = "com.mogadon.osric-3-char-sheet/state";
+  const itemId = new URLSearchParams(location.search).get("itemId");
+
+  const msg = document.getElementById("msg");
+  const facts = document.getElementById("facts");
+  const oursEl = document.getElementById("ours");
+  const allMetaEl = document.getElementById("allMeta");
+  const propsEl = document.getElementById("props");
+  const copyBtn = document.getElementById("copyBtn");
+  const pretty = (v) => JSON.stringify(v, null, 2);
+
+  let OBR = null;
+  let lastDump = "";
+
+  function addFact(k, v) {
+    const row = document.createElement("div");
+    row.className = "fact";
+    const kk = document.createElement("span"); kk.className = "k"; kk.textContent = k;
+    const vv = document.createElement("span"); vv.className = "v"; vv.textContent = v;
+    row.append(kk, vv);
+    facts.appendChild(row);
+  }
+
+  async function render() {
+    const found = await OBR.scene.items.getItems([itemId]);
+    const item = found[0];
+    facts.innerHTML = "";
+    if (!item) {
+      msg.textContent = "That token no longer exists in the scene.";
+      msg.className = "note err";
+      oursEl.textContent = allMetaEl.textContent = propsEl.textContent = "";
+      return;
+    }
+    msg.textContent = "";
+    const role = await OBR.player.getRole();
+    const { metadata, ...props } = item;
+    const ours = metadata ? metadata[OUR_KEY] : undefined;
+    const youMadeIt = item.createdUserId === OBR.player.id;
+
+    addFact("Token name", item.name || "(unnamed)");
+    addFact("Token id", item.id);
+    addFact("Layer", String(item.layer));
+    addFact("You are viewing as", String(role));
+    addFact("Your player id", String(OBR.player.id));
+    addFact("Token created by", String(item.createdUserId));
+    addFact("Created by you?", youMadeIt ? "yes" : "no");
+
+    oursEl.textContent = ours === undefined
+      ? "(none — this extension has not saved any data on this token)"
+      : pretty(ours);
+    allMetaEl.textContent = pretty(metadata === undefined ? {} : metadata);
+    propsEl.textContent = pretty(props);
+    lastDump = pretty({ viewer: { role, playerId: OBR.player.id, createdByYou: youMadeIt }, item });
+  }
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(lastDump);
+      copyBtn.textContent = "Copied";
+    } catch (e) {
+      // Clipboard access can be blocked inside an embedded frame — fall back
+      // to selecting the all-metadata block so it can be copied by hand.
+      const range = document.createRange();
+      range.selectNodeContents(allMetaEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      copyBtn.textContent = "Selected — press Ctrl/Cmd+C";
+    }
+    setTimeout(() => { copyBtn.textContent = "Copy everything"; }, 2500);
+  });
+  document.getElementById("closeBtn").addEventListener("click", () => {
+    if (OBR && OBR.isAvailable) OBR.modal.close(MODAL_ID);
+  });
+  document.getElementById("refreshBtn").addEventListener("click", () => {
+    if (OBR && OBR.isAvailable && itemId) render();
+  });
+
+  try {
+    OBR = (await import("https://esm.sh/@owlbear-rodeo/sdk@2")).default;
+  } catch (e) {
+    msg.textContent = "Couldn't load the Owlbear SDK.";
+    msg.className = "note err";
+  }
+  if (OBR) {
+    if (!OBR.isAvailable) {
+      msg.textContent = "Open this from Owlbear Rodeo's right-click menu on a token.";
+    } else if (!itemId) {
+      msg.textContent = "No token was specified.";
+      msg.className = "note err";
+    } else {
+      OBR.onReady(render);
+    }
+  }
+</script>
+</body>
+</html>

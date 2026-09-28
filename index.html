@@ -14,6 +14,7 @@
     --accent: #3d6b5c;
     --accent-soft: #d8e4de;
     --warn: #8a3b2b;
+    --ink-faint: #a8a08c;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -252,6 +253,10 @@
     color: var(--ink-soft);
   }
   .ab-desc-row b { color: var(--ink); font-family: "SF Mono", "Courier New", monospace; font-weight: 700; white-space: nowrap; }
+
+  /* Options the OSRIC class/ancestry limits rule out stay visible but
+     inert: italic, light, normal weight. No added text. */
+  select option:disabled { font-style: italic; font-weight: 400; color: var(--ink-faint); }
 
   .legend { margin-top: 2px; }
   .legend-body {
@@ -502,6 +507,7 @@
 
   .hp-boxes { display: flex; gap: 8px; margin-bottom: 6px; }
   .hp-boxes .major-value { flex: 1; }
+  .hp-actions { margin-bottom: 4px; }
 
   .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .hp-input-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
@@ -612,6 +618,7 @@
         <input type="number" class="mv-value" id="currentHPInput" step="1" />
       </div>
     </div>
+    <div class="hp-actions"><button type="button" class="io-btn" id="hpResetBtn" title="Set Current HP equal to Max HP">Reset Current HP to Max</button></div>
     <div class="bthb-note" id="hpBreakdown"></div>
   </div>
 </div>
@@ -729,7 +736,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.17.0";
+  const APP_VERSION = "0.18.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1630,13 +1637,17 @@
     }
   }
 
+  // Options the rules rule out (ancestry -> class, class -> armour/shield)
+  // are only ever *styled* as disabled (see `select option:disabled` in the
+  // CSS), never relabelled. Appending explanatory text such as "not
+  // available to ..." widened the selects and made the responsive layout
+  // jump around.
   function updateClassOptions() {
     const allowed = ANCESTRY_CLASSES[state.ancestry] || ANCESTRY_CLASSES["Human"];
     let switched = false;
     for (const opt of classSelect.options) {
       const ok = allowed.has(opt.value);
       opt.disabled = !ok;
-      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.ancestry})`;
     }
     if (!allowed.has(state.charClass)) {
       const fallback = [...allowed][0] || "Fighter";
@@ -1654,7 +1665,6 @@
     for (const opt of armorSelect.options) {
       const ok = !armorAllowed || armorAllowed.includes(opt.value);
       opt.disabled = !ok;
-      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.charClass})`;
     }
     if (armorAllowed && !armorAllowed.includes(state.armor)) {
       state.armor = armorAllowed[0];
@@ -1665,7 +1675,6 @@
     for (const opt of shieldSelect.options) {
       const ok = !shieldAllowed || shieldAllowed.includes(opt.value);
       opt.disabled = !ok;
-      opt.textContent = ok ? opt.value : `${opt.value} (not available to ${state.charClass})`;
     }
     if (shieldAllowed && !shieldAllowed.includes(state.shield)) {
       state.shield = shieldAllowed[0];
@@ -1741,6 +1750,14 @@
   });
   currentHPInput.addEventListener("input", () => {
     state.currentHP = currentHPInput.value === "" ? 0 : (parseInt(currentHPInput.value, 10) || 0);
+    persist();
+  });
+  // Reads the Max HP that's actually on screen, so "reset to max" can never
+  // disagree with what the player is looking at.
+  document.getElementById("hpResetBtn").addEventListener("click", () => {
+    const max = Number(document.getElementById("hpTotal").textContent) || 0;
+    state.currentHP = max;
+    currentHPInput.value = max;
     persist();
   });
   gpInput.addEventListener("input", () => {

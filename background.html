@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>OSRIC 3.0 Character Sheet — background</title>
+</head>
+<body>
+<script type="module">
+  // Runs invisibly for the whole room (Owlbear loads it from the manifest's
+  // background_url). Its only job right now is registering the right-click
+  // "show all data on this token" item.
+  //
+  // ------------------------------------------------------------------
+  // SWITCH: set to false to turn the token-data inspector off. Nothing is
+  // registered and the Owlbear SDK isn't even loaded — but every line of
+  // this file, and debug.html, stays in place for when it's needed again.
+  const ENABLE_TOKEN_DEBUG_MENU = true;
+  // ------------------------------------------------------------------
+
+  const ID = "com.mogadon.osric-3-char-sheet";
+
+  // The manifest hands this page ?v=<version>. Reusing it for the pages
+  // and icon opened from here means the manifest stays the single source of
+  // truth for cache-busting — no extra place to keep in sync.
+  const v = new URLSearchParams(location.search).get("v") || "";
+  const base = new URL(".", location.href).href;
+  const asset = (file, extra = "") => `${base}${file}?v=${encodeURIComponent(v)}${extra}`;
+
+  if (ENABLE_TOKEN_DEBUG_MENU) {
+    const OBR = (await import("https://esm.sh/@owlbear-rodeo/sdk@2")).default;
+    OBR.onReady(() => {
+      OBR.contextMenu.create({
+        id: `${ID}/token-data`,
+        icons: [
+          {
+            icon: asset("icon.svg"),
+            label: "Show all data on this token (debug)",
+            // Any single selected item — not just Character-layer tokens —
+            // so it can be pointed at anything when something looks off.
+            filter: { max: 1 },
+          },
+        ],
+        onClick(context) {
+          const item = context.items && context.items[0];
+          if (!item) return;
+          OBR.modal.open({
+            id: `${ID}/token-data-modal`,
+            url: asset("debug.html", `&itemId=${encodeURIComponent(item.id)}`),
+            width: 480,
+            height: 560,
+          });
+        },
+      });
+    });
+  }
+</script>
+</body>
+</html>
