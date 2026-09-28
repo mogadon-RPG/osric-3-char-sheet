@@ -138,14 +138,24 @@ key names are deliberately independent of the code's internal names:
 
 ```json
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "character": { "ancestry": "Dwarf", "charClass": "Fighter", "level": 4, "xp": 8000 },
   "abilities": { "str": 16, "dex": 12, "con": 15, "int": 9, "wis": 10, "cha": 8 },
   "combat": { "armor": "Chain mail", "shield": "Small (1 foe)" },
   "hitPoints": { "current": 22, "rolls": [8, 6, 5, 3] },
-  "wealth": { "gp": 75 }
+  "wealth": { "gp": 75 },
+  "player": { "id": "abc123...", "name": "Flense" }
 }
 ```
+
+`player` is a snapshot of the token's owner (not whoever happened to be
+editing), refreshed on every save while that owner is connected. If they're
+offline at save time, whatever name was last recorded is kept rather than
+overwritten with a bare id; `player.name` is `null` until a save happens
+while the owner is connected at least once. Owlbear exposes a display name
+and an id — no account login. There is no 1.0.0 compatibility handling: a
+1.0.0 file still imports (`player` is simply absent, so both fields come
+back `null`), but nothing translates or fills them in.
 
 Import checks types, ranges and the known ancestry, class, armour and shield
 names, and rejects anything malformed; a file from a different schema version

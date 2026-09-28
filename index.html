@@ -770,7 +770,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.19.0";
+  const APP_VERSION = "0.19.2";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1444,6 +1444,7 @@
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
     hpRolls: [], currentHP: 0, armor: "None", shield: "None", gp: 0,
+    ownerId: null, ownerName: null, // the token's owner — see snapshotOwnerName()
   });
   const state = defaultState();
 
@@ -2226,7 +2227,7 @@
   // Mustache dot-path use (e.g. {{abilities.str}}, {{character.charClass}})
   // once the template-merge feature gets built -- this shape IS that
   // contract, not a placeholder for it.
-  const SCHEMA_VERSION = "1.0.0";
+  const SCHEMA_VERSION = "1.1.0"; // 1.1.0 adds player.id / player.name (the token's owner)
 
   const FIELD_MAP = [
     ["character.ancestry", "ancestry"],
@@ -2238,6 +2239,7 @@
     ["combat.armor", "armor"], ["combat.shield", "shield"],
     ["hitPoints.current", "currentHP"], ["hitPoints.rolls", "hpRolls"],
     ["wealth.gp", "gp"],
+    ["player.id", "ownerId"], ["player.name", "ownerName"],
   ];
 
   function setPath(obj, path, value) {
@@ -2262,6 +2264,9 @@
   function validateImportPayload(obj) {
     const errors = [];
     if (obj === null || typeof obj !== "object") return ["Not a JSON object."];
+    const ownerId = getPath(obj, "player.id"), ownerName = getPath(obj, "player.name");
+    if (ownerId !== undefined && ownerId !== null && typeof ownerId !== "string") errors.push(`"player.id" must be a string or null (got ${JSON.stringify(ownerId)}).`);
+    if (ownerName !== undefined && ownerName !== null && typeof ownerName !== "string") errors.push(`"player.name" must be a string or null (got ${JSON.stringify(ownerName)}).`);
     for (const k of ["str", "dex", "con", "int", "wis", "cha"]) {
       const v = getPath(obj, `abilities.${k}`);
       if (typeof v !== "number" || isNaN(v) || v < 3 || v > 19) {
@@ -2384,6 +2389,7 @@
   const METADATA_KEY = "com.mogadon.osric-3-char-sheet/state";
   let obr = null;
   let boundItemId = null;
+  let currentOwnerId = null; // createdUserId of the CURRENTLY BOUND token, kept for persist()
   // Once true, map-selection changes (obr.player.onChange) no longer
   // auto-rebind the sheet — a manual pick from the bind picker overrides
   // the automatic "exactly one token selected" behaviour until the user
@@ -2512,6 +2518,17 @@
     if (document.activeElement !== tokenLabelInput && tokenLabelInput.value !== label) {
       tokenLabelInput.value = label;
     }
+    // The bound token's owner can change without a selection event at all —
+    // reassignment via Owlbear's own Owner menu doesn't move the map
+    // selection, and refreshSelection() skips re-reading a token that's
+    // already bound. Catch it here so persist() snapshots the NEW owner
+    // instead of going stale on whoever it was bound under.
+    const liveOwnerId = item.createdUserId || null;
+    if (liveOwnerId !== currentOwnerId) {
+      currentOwnerId = liveOwnerId;
+      state.ownerId = liveOwnerId;
+      state.ownerName = null; // unknown until the next persist() resolves it
+    }
   }
 
   async function tryConnectOBR() {
@@ -2557,6 +2574,14 @@
     // the PREVIOUS token's character on screen, and the first edit then
     // copied it onto the new token.
     Object.assign(state, defaultState(), saved ? cloneJSON(saved) : {});
+    // The owner id is always taken live from the item, since it can change
+    // (GM reassignment) independently of anything previously saved. The
+    // NAME snapshot is left as whatever was last saved — refreshed only on
+    // the next persist(), and only while the owner is actually connected —
+    // per Mark: never overwrite a known name with an id, and don't chase
+    // renames outside of a save.
+    currentOwnerId = item.createdUserId || null;
+    state.ownerId = currentOwnerId;
     hpClampMessage = ""; hpClampedByRender = false;
     syncTopControls();
     recomputeAll();
@@ -2594,6 +2619,19 @@
     }
   }
 
+  // Resolves a live display name for a player id from the room's own player
+  // list — the only source; Owlbear exposes no account login. Returns null
+  // if that person isn't connected right now, rather than guessing.
+  async function resolveName(id) {
+    if (!id) return null;
+    try {
+      if (id === obr.player.id) return await obr.player.getName();
+      const players = await obr.party.getPlayers();
+      const p = players.find(pl => pl.id === id);
+      return p ? p.name : null;
+    } catch (e) { return null; }
+  }
+
   async function persist() {
     if (!obr) return;
     if (!boundItemId) {
@@ -2601,6 +2639,14 @@
       return;
     }
     const mine = ++saveSeq; // only the newest save reports its outcome
+    // Refresh the owner-name snapshot on every save, while they're connected
+    // to look up. If they're offline right now, the name already on the
+    // sheet (from a previous save, or none yet) is left exactly as is.
+    if (currentOwnerId) {
+      state.ownerId = currentOwnerId;
+      const freshName = await resolveName(currentOwnerId);
+      if (freshName) state.ownerName = freshName;
+    }
     try {
       await obr.scene.items.updateItems([boundItemId], (items) => {
         for (const item of items) {
@@ -2654,6 +2700,10 @@
     const id = item.createdUserId;
     if (!id) return { text: "unknown", tip: "" };
     if (names.has(id)) return { text: names.get(id) + (id === obr.player.id ? " (you)" : ""), tip: id };
+    // Not connected right now: fall back to the name last saved on this
+    // token, if there is one, rather than a bare id.
+    const snap = item.metadata?.[METADATA_KEY]?.ownerName;
+    if (snap) return { text: `${snap} (offline)`, tip: `${id} — last known name; not connected right now` };
     return { text: `${id.slice(0, 8)}… (offline)`, tip: `${id} — not connected right now, so no name is available` };
   }
 
@@ -2740,16 +2790,24 @@
   }
   async function onBindRowClickUnsafe(itemId) {
     if (pendingImport) {
-      const payload = pendingImport;
+      const items0 = await obr.scene.items.getItems([itemId]);
+      const target = items0[0];
+      const payload = cloneJSON(pendingImport._appliedState);
+      // The write goes onto `target`, whose owner may differ from whoever's
+      // sheet this was uploaded or copied from — same rule as an ordinary
+      // save: record the token's own owner, not the editor.
+      payload.ownerId = target ? (target.createdUserId || null) : null;
+      payload.ownerName = payload.ownerId ? await resolveName(payload.ownerId) : null;
       await obr.scene.items.updateItems([itemId], (items) => {
         for (const item of items) {
-          item.metadata[METADATA_KEY] = cloneJSON(payload._appliedState);
+          item.metadata[METADATA_KEY] = payload;
         }
       });
     }
     const items = await obr.scene.items.getItems([itemId]);
     const item = items[0];
     if (!item) return;
+    currentOwnerId = item.createdUserId || null;
     if (pendingImport) {
       // Write-then-bind: the state was already applied to the sheet by
       // the upload handler, so this just adopts the token as bound to it

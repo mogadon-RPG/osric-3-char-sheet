@@ -124,7 +124,9 @@
     addFact("You are viewing as", String(role));
     addFact("Your player id", String(OBR.player.id));
     addFact("Owner (createdUserId)", String(item.createdUserId));
-    addFact("Owner's name", (await nameOf(item.createdUserId)) || "not connected — id only");
+    const liveName = await nameOf(item.createdUserId);
+    const savedName = ours && ours.ownerName;
+    addFact("Owner's name", liveName || (savedName ? `${savedName} (offline, last saved name)` : "not connected — id only, never saved"));
     addFact("Owned by you?", youMadeIt ? "yes" : "no");
     addFact("Last modified by", String(item.lastModifiedUserId));
 
