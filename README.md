@@ -108,6 +108,8 @@ shows an old version after an update, add a throwaway query string
 - The data lives in the token's metadata under
   `com.mogadon.osric-3-char-sheet/state`. The text box under the avatar edits
   the token's own text label (Owlbear's "Edit text").
+  Binding to a token with no saved data starts a blank default character, and
+  nothing is written to a token until something on the sheet is edited.
 
 **Export / Import.** The exported JSON is a nested, versioned contract whose
 key names are deliberately independent of the code's internal names:
@@ -147,6 +149,11 @@ up the background page.
 - Bump versions with exact-string replacement, never a loose pattern: an
   unescaped-dot `sed` once rewrote part of an ability table and silently
   broke the whole script.
+- **Never hand the SDK your own live objects.** `updateItems` runs through
+  Immer, which freezes whatever you assign into an update. A shallow copy of
+  `state` froze the live HD-rolls array and broke entering rolls after the
+  first save. Deep-copy on the way out (`cloneJSON`) and don't mutate arrays
+  in place.
 - A syntax check alone is not enough — run the page. A `const` read before
   its declaration parses fine and only fails when the page actually executes.
 

@@ -736,7 +736,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.18.0";
+  const APP_VERSION = "0.18.1";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1404,11 +1404,21 @@
     { key: "cha", label: "CHA" },
   ];
 
-  const state = {
+  // A blank, fresh character. A function (not a shared object) so every use
+  // gets its own arrays.
+  const defaultState = () => ({
     str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     charClass: "Fighter", level: 1, xp: 0, ancestry: "Human",
     hpRolls: [], currentHP: 0, armor: "None", shield: "None", gp: 0,
-  };
+  });
+  const state = defaultState();
+
+  // Owlbear's SDK runs every updateItems through Immer, which FREEZES
+  // whatever you assign into an update. Handing it a shallow copy of `state`
+  // therefore froze the live hpRolls array the sheet was still editing, and
+  // every later roll entry failed. So: deep-copy on the way out, and never
+  // mutate arrays in place (see renderHP and the HD input handler).
+  const cloneJSON = (o) => JSON.parse(JSON.stringify(o));
 
   const sheetEl = document.getElementById("sheet");
   const ancestrySelect = document.getElementById("charAncestry");
@@ -1907,8 +1917,11 @@
 
     // Keep hpRolls in step with the current rolled-level count (class or
     // level may have just changed) without discarding entries that still apply.
-    while (state.hpRolls.length < rolledLevels) state.hpRolls.push(0);
-    state.hpRolls.length = rolledLevels;
+    // Copy-on-write, never in place: this array may already have been frozen
+    // by the SDK (see cloneJSON above).
+    const rolls = state.hpRolls.slice(0, rolledLevels);
+    while (rolls.length < rolledLevels) rolls.push(0);
+    state.hpRolls = rolls;
 
     const conBonus = conHpBonus();
     const rolledSum = state.hpRolls.reduce((a, v) => a + (Number(v) || 0), 0);
@@ -1936,7 +1949,9 @@
     document.querySelectorAll(".hp-input").forEach(inp => {
       inp.addEventListener("input", () => {
         const idx = parseInt(inp.dataset.idx, 10);
-        state.hpRolls[idx] = parseInt(inp.value, 10) || 0;
+        const next = state.hpRolls.slice();
+        next[idx] = parseInt(inp.value, 10) || 0;
+        state.hpRolls = next;
         recompute(["hpRolls"]);
         persist();
       });
@@ -2401,11 +2416,13 @@
     boundItemId = item.id;
     manualBindActive = !!manual;
     const saved = item.metadata?.[METADATA_KEY];
-    if (saved) {
-      Object.assign(state, saved);
-      syncTopControls();
-      recomputeAll();
-    }
+    // Start from a blank character and lay the token's saved data over it.
+    // Without this, binding to a token with no (or partial) saved data left
+    // the PREVIOUS token's character on screen, and the first edit then
+    // copied it onto the new token.
+    Object.assign(state, defaultState(), saved ? cloneJSON(saved) : {});
+    syncTopControls();
+    recomputeAll();
     statusEl.textContent = `${manual ? "Bound (manual)" : "Linked"}: ${item.name || item.id}`;
     statusEl.classList.add("linked");
     statusEl.classList.remove("warn");
@@ -2422,6 +2439,7 @@
       renderTokenPanel(null);
       return;
     }
+    if (selection[0] === boundItemId) return; // already showing this token
     const items = await obr.scene.items.getItems([selection[0]]);
     const item = items[0];
     if (!item) return;
@@ -2432,7 +2450,7 @@
     if (!obr || !boundItemId) return;
     await obr.scene.items.updateItems([boundItemId], (items) => {
       for (const item of items) {
-        item.metadata[METADATA_KEY] = { ...state };
+        item.metadata[METADATA_KEY] = cloneJSON(state);
       }
     });
   }
@@ -2513,6 +2531,7 @@
 
     document.getElementById("bindRowAuto").addEventListener("click", () => {
       manualBindActive = false;
+      boundItemId = null; // force a fresh load of whatever is selected
       closeBindPicker();
       refreshSelection();
     });
@@ -2526,7 +2545,7 @@
       const payload = pendingImport;
       await obr.scene.items.updateItems([itemId], (items) => {
         for (const item of items) {
-          item.metadata[METADATA_KEY] = { ...payload._appliedState };
+          item.metadata[METADATA_KEY] = cloneJSON(payload._appliedState);
         }
       });
     }
@@ -2568,7 +2587,7 @@
       return;
     }
     applyImportedPayload(parsed);
-    parsed._appliedState = { ...state };
+    parsed._appliedState = cloneJSON(state);
     pendingImport = parsed;
     bindUploadStatus.textContent = `Loaded ${parsed.character.charClass} (${parsed.character.ancestry}) — pick a token below to write it to.`;
     bindUploadStatus.className = "io-note io-ok";
