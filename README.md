@@ -7,6 +7,14 @@ character sheet.
 
 Status: pilot (0.x). Built by Anthropic Claude.
 
+Every line of code, every design decision, and every commit in this
+repository was produced by Claude, directed turn-by-turn by Mark
+(Mogadon) over chat — describing what to build, reviewing screenshots
+from his own Owlbear Rodeo sessions, and approving each change. Mark has
+not personally cloned, pulled, or edited this repository; there is no
+local working copy on his side. See `BACKLOG.md` for what's intentionally
+not built yet.
+
 ## Assumptions and decisions — read this first
 
 **1. This is canonical OSRIC 3.0, and nothing else.**
