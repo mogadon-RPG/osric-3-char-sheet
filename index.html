@@ -145,6 +145,24 @@
   .bind-row-meta { font-size: 0.62rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bind-row-pending { color: var(--accent); font-size: 0.65rem; font-weight: 700; }
 
+  .roster-list { display: flex; flex-direction: column; gap: 4px; }
+  .roster-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 5px 6px;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: #fff;
+  }
+  .roster-name { font-size: 0.75rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .roster-owner { font-size: 0.62rem; color: var(--ink-soft); grid-column: 1; }
+  .roster-class { font-size: 0.68rem; text-align: right; }
+  .roster-stat { font-size: 0.68rem; text-align: right; white-space: nowrap; }
+  .roster-stat b { font-variant-numeric: tabular-nums; }
+  .roster-empty, .roster-loading { font-size: 0.7rem; color: var(--ink-soft); font-style: italic; }
+
   #status {
     font-size: 0.68rem;
     padding: 4px 8px;
@@ -522,7 +540,7 @@
 
   .hp-boxes { display: flex; gap: 8px; margin-bottom: 6px; }
   .hp-boxes .major-value { flex: 1; }
-  .hp-actions { margin-bottom: 4px; }
+  .hp-reset-btn { flex: 0 0 auto; align-self: center; }
   .hp-clamp-note { color: var(--warn); }
 
   .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -640,8 +658,8 @@
         <span class="mv-label">Current HP</span>
         <input type="number" class="mv-value" id="currentHPInput" name="currentHP" aria-label="Current hit points" step="1" />
       </div>
+      <button type="button" class="io-btn hp-reset-btn" id="hpResetBtn" title="Set Current HP equal to Max HP">Reset</button>
     </div>
-    <div class="hp-actions"><button type="button" class="io-btn" id="hpResetBtn" title="Set Current HP equal to Max HP">Reset Current HP to Max</button></div>
     <div class="bthb-note" id="hpBreakdown"></div>
   </div>
 </div>
@@ -722,6 +740,14 @@
   </div>
 </details>
 
+<div class="section gm-only" id="rosterSection" style="display:none;">
+  <div class="section-header">Party Roster <span class="tag" id="rosterTag"></span></div>
+  <div class="panel-body">
+    <div class="bthb-note" id="rosterNote">GM only. Every Character-layer token in the scene, with its owner and sheet.</div>
+    <div class="roster-list" id="rosterList"></div>
+  </div>
+</div>
+
 <div class="section" id="notesDetails">
   <div class="section-header">Notes</div>
   <div class="panel-body">
@@ -770,7 +796,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.19.2";
+  const APP_VERSION = "0.20.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1364,6 +1390,14 @@
     "Splint":            { descAC: 4 },
     "Plate mail":        { descAC: 3 },
   };
+  function computeACFor(sheet) {
+    const armor = ARMOR_TABLE[sheet.armor] || ARMOR_TABLE["None"];
+    const hasShield = sheet.shield && sheet.shield !== "None";
+    const adj = ANCESTRY[sheet.ancestry]?.adj.dex || 0;
+    const dex = DEX_TABLE[clampInt((sheet.dex ?? 10) + adj)];
+    return 20 - armor.descAC + (hasShield ? 1 : 0) + (dex ? dex.acAdj[1] : 0);
+  }
+
   function computeAC() {
     const armor = ARMOR_TABLE[state.armor] || ARMOR_TABLE["None"];
     const armorDesc = armor.descAC;
@@ -2529,6 +2563,7 @@
       state.ownerId = liveOwnerId;
       state.ownerName = null; // unknown until the next persist() resolves it
     }
+    if (rosterIsGM) renderRoster();
   }
 
   async function tryConnectOBR() {
@@ -2551,6 +2586,7 @@
       obr.player.onChange(refreshSelection);
       try { obr.scene.items.onChange(onItemsChanged); } catch (e) { /* scene not ready; label just won't live-update */ }
       refreshSelection();
+      updateRosterVisibility();
     });
     // If Owlbear never says it's ready, say so instead of sitting on
     // "Checking…" forever.
@@ -2828,6 +2864,54 @@
 
   // Reuses the upload-and-bind path: the pending payload is simply the sheet
   // as it is right now, and the next token picked receives it.
+  // ---------- GM-only Party Roster ----------
+  // Every Character-layer token in the scene with its owner, name, and
+  // sheet — a standing view, unlike the bind picker's one-shot list.
+  const rosterSection = document.getElementById("rosterSection");
+  const rosterList = document.getElementById("rosterList");
+  const rosterTag = document.getElementById("rosterTag");
+  let rosterIsGM = false;
+
+  async function updateRosterVisibility() {
+    try {
+      rosterIsGM = !!obr && obr.isAvailable && (await obr.player.getRole()) === "GM";
+    } catch (e) { rosterIsGM = false; }
+    rosterSection.style.display = rosterIsGM ? "" : "none";
+    if (rosterIsGM) renderRoster();
+  }
+
+  function rosterRowHtml(item, names) {
+    const own = ownerLabel(item, names);
+    const sheet = item.metadata?.[METADATA_KEY];
+    if (!sheet) {
+      return `<div class="roster-row"><span class="roster-name" title="Token name">${esc(item.name || "(unnamed)")}</span>`
+        + `<span class="roster-class">no sheet</span><span></span><span></span>`
+        + `<span class="roster-owner" title="${esc(own.tip)}">Owner: ${esc(own.text)}</span></div>`;
+    }
+    const ac = computeACFor(sheet);
+    return `<div class="roster-row"><span class="roster-name" title="Token name">${esc(item.name || "(unnamed)")}</span>`
+      + `<span class="roster-class">${esc(sheet.charClass || "")}${sheet.level ? " L" + sheet.level : ""}</span>`
+      + `<span class="roster-stat">HP <b>${Number(sheet.currentHP) || 0}</b></span>`
+      + `<span class="roster-stat">AC <b>${ac}</b></span>`
+      + `<span class="roster-owner" title="${esc(own.tip)}">Owner: ${esc(own.text)}</span></div>`;
+  }
+
+  async function renderRoster() {
+    if (!rosterIsGM) return;
+    try {
+      const items = await obr.scene.items.getItems();
+      const characterItems = items.filter(i => i.layer === "CHARACTER");
+      const candidates = characterItems.length ? characterItems : items.filter(i => i.type === "IMAGE");
+      const names = await playerNames();
+      rosterTag.textContent = candidates.length ? `${candidates.length}` : "";
+      rosterList.innerHTML = candidates.length
+        ? candidates.map(i => rosterRowHtml(i, names)).join("")
+        : `<div class="roster-empty">No character tokens in the scene yet.</div>`;
+    } catch (e) {
+      rosterList.innerHTML = `<div class="roster-empty">Couldn't load the roster: ${e && e.message ? e.message : e}</div>`;
+    }
+  }
+
   document.getElementById("bindSaveSheetBtn").addEventListener("click", () => {
     pendingImport = { _appliedState: cloneJSON(state) };
     bindUploadStatus.textContent = "Pick a token to write this sheet onto — it replaces whatever that token holds.";

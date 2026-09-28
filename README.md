@@ -73,6 +73,9 @@ in the Hit Points section sets it to Max HP.
 - **Saving Throws** and **Level Advancement** for all ten classes.
 - **Class Specific** (shown only where they apply): Turning the Undead,
   Thief Skills, Spell Slots.
+- **Party Roster** (GM only): every Character-layer token in the scene —
+  name, current owner, sheet class and level, HP, AC — refreshed live as any
+  token's sheet changes, not just the one currently open.
 - **Notes** (level grants and cap notes gathered in one place) and a
   **Sources** rollup.
 
