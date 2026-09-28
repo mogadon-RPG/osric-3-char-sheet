@@ -92,6 +92,16 @@
     facts.appendChild(row);
   }
 
+  // Owlbear gives extensions a player's display name and id — no account login —
+  // and names only for people who are connected right now.
+  async function nameOf(id) {
+    try {
+      if (id === OBR.player.id) return (await OBR.player.getName()) + " (you)";
+      const p = (await OBR.party.getPlayers()).find(x => x.id === id);
+      return p ? p.name : null;
+    } catch (e) { return null; }
+  }
+
   async function render() {
     const found = await OBR.scene.items.getItems([itemId]);
     const item = found[0];
@@ -113,15 +123,17 @@
     addFact("Layer", String(item.layer));
     addFact("You are viewing as", String(role));
     addFact("Your player id", String(OBR.player.id));
-    addFact("Token created by", String(item.createdUserId));
-    addFact("Created by you?", youMadeIt ? "yes" : "no");
+    addFact("Owner (createdUserId)", String(item.createdUserId));
+    addFact("Owner's name", (await nameOf(item.createdUserId)) || "not connected — id only");
+    addFact("Owned by you?", youMadeIt ? "yes" : "no");
+    addFact("Last modified by", String(item.lastModifiedUserId));
 
     oursEl.textContent = ours === undefined
       ? "(none — this extension has not saved any data on this token)"
       : pretty(ours);
     allMetaEl.textContent = pretty(metadata === undefined ? {} : metadata);
     propsEl.textContent = pretty(props);
-    lastDump = pretty({ viewer: { role, playerId: OBR.player.id, createdByYou: youMadeIt }, item });
+    lastDump = pretty({ viewer: { role, playerId: OBR.player.id, ownedByYou: youMadeIt }, item });
   }
 
   copyBtn.addEventListener("click", async () => {

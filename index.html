@@ -117,7 +117,7 @@
     color: var(--ink-soft);
     padding: 0 4px;
   }
-  .bind-picker-upload { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .bind-picker-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
   .bind-upload-btn { display: inline-block; cursor: pointer; }
   .bind-picker-note {
     font-size: 0.65rem;
@@ -140,7 +140,9 @@
     width: 28px; height: 28px; border-radius: 3px; object-fit: cover;
     flex: 0 0 auto; background: var(--paper-dim);
   }
-  .bind-row-name { font-size: 0.75rem; flex: 1 1 auto; }
+  .bind-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .bind-row-name { font-size: 0.75rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bind-row-meta { font-size: 0.62rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bind-row-pending { color: var(--accent); font-size: 0.65rem; font-weight: 700; }
 
   #status {
@@ -521,6 +523,7 @@
   .hp-boxes { display: flex; gap: 8px; margin-bottom: 6px; }
   .hp-boxes .major-value { flex: 1; }
   .hp-actions { margin-bottom: 4px; }
+  .hp-clamp-note { color: var(--warn); }
 
   .hp-inputs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .hp-input-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
@@ -537,6 +540,11 @@
     color: var(--ink);
   }
   .hp-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* These boxes are only 34px wide, so the browser's up/down spinner sat
+     right where a click lands and nudged an empty box to 0 (leaving a stray
+     leading zero in front of a typed roll). Rolls are typed, so no spinner. */
+  .hp-input { -moz-appearance: textfield; appearance: textfield; }
+  .hp-input::-webkit-outer-spin-button, .hp-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
 </head>
 <body>
@@ -557,7 +565,7 @@
     <div class="token-img-box" id="tokenImgBox" title="Click to bind to a different token">
       <span class="placeholder">no token</span>
     </div>
-    <input type="text" class="token-label-input" id="tokenLabelInput" placeholder="—" disabled maxlength="60" title="The text label shown under this token on the map (the same text as Owlbear's own Edit text)" />
+    <input type="text" class="token-label-input" id="tokenLabelInput" name="tokenLabel" aria-label="Token text label" placeholder="—" disabled maxlength="60" title="The text label shown under this token on the map (the same text as Owlbear's own Edit text)" />
   </div>
 </div>
 
@@ -569,6 +577,7 @@
   <div class="bind-picker-upload">
     <label for="bindUploadInput" class="io-btn bind-upload-btn">Upload character JSON…</label>
     <input type="file" id="bindUploadInput" accept="application/json,.json" style="display:none;" />
+    <button type="button" class="io-btn" id="bindSaveSheetBtn" title="Write the sheet as it is now onto a token you pick, replacing that token's data">Save this sheet to a token…</button>
     <span id="bindUploadStatus"></span>
   </div>
   <div class="bind-picker-note" id="bindPickerNote"></div>
@@ -578,7 +587,7 @@
 <div class="mv-row">
   <div class="major-value mv-editable mv-xp">
     <span class="mv-label">XP</span>
-    <input type="number" class="mv-value" id="xpInput" min="0" step="1" value="0" />
+    <input type="number" class="mv-value" id="xpInput" name="xp" aria-label="Experience points" min="0" step="1" value="0" />
   </div>
   <div class="major-value mv-readout">
     <span class="mv-label">Level</span>
@@ -586,16 +595,16 @@
   </div>
   <div class="major-value mv-editable mv-fill">
     <span class="mv-label">GP</span>
-    <input type="number" class="mv-value" id="gpInput" min="0" step="1" value="0" />
+    <input type="number" class="mv-value" id="gpInput" name="gp" aria-label="Gold pieces" min="0" step="1" value="0" />
   </div>
   <div class="mv-break"></div>
   <div class="major-value">
     <span class="mv-label">Armour</span>
-    <select id="armorSelect" class="mv-select"></select>
+    <select id="armorSelect" name="armor" aria-label="Armour" class="mv-select"></select>
   </div>
   <div class="major-value">
     <span class="mv-label">Shield</span>
-    <select id="shieldSelect" class="mv-select"></select>
+    <select id="shieldSelect" name="shield" aria-label="Shield" class="mv-select"></select>
   </div>
   <div class="major-value mv-readout">
     <span class="mv-label">AC</span>
@@ -619,6 +628,7 @@
       <summary>Per-level rolls</summary>
       <div class="panel-body">
         <div class="hp-inputs" id="hpInputs"></div>
+        <div class="bthb-note hp-clamp-note" id="hpClampNote"></div>
       </div>
     </details>
     <div class="hp-boxes">
@@ -628,7 +638,7 @@
       </div>
       <div class="major-value mv-editable">
         <span class="mv-label">Current HP</span>
-        <input type="number" class="mv-value" id="currentHPInput" step="1" />
+        <input type="number" class="mv-value" id="currentHPInput" name="currentHP" aria-label="Current hit points" step="1" />
       </div>
     </div>
     <div class="hp-actions"><button type="button" class="io-btn" id="hpResetBtn" title="Set Current HP equal to Max HP">Reset Current HP to Max</button></div>
@@ -646,7 +656,7 @@
 <div class="section">
   <div class="section-header">
     Combat Rolls
-    <span class="combat-range">to AC <input type="number" id="acMax" min="11" max="40" value="25" /></span>
+    <span class="combat-range">to AC <input type="number" id="acMax" name="acMax" aria-label="Highest armour class shown in the roll table" min="11" max="40" value="25" /></span>
   </div>
   <div class="panel-body">
     <div class="matrix-scroll">
@@ -701,11 +711,11 @@
   <div class="panel-body">
     <div class="io-block">
       <button type="button" id="exportBtn" class="io-btn">Export this character as JSON</button>
-      <textarea id="exportBox" class="io-box" rows="5" readonly placeholder="Click Export, then copy this text."></textarea>
+      <textarea id="exportBox" name="exportJson" aria-label="Exported character JSON" class="io-box" rows="5" readonly placeholder="Click Export, then copy this text."></textarea>
       <div class="io-note" id="exportNote"></div>
     </div>
     <div class="io-block">
-      <textarea id="importBox" class="io-box" rows="5" placeholder="Paste a character's exported JSON here."></textarea>
+      <textarea id="importBox" name="importJson" aria-label="Character JSON to import" class="io-box" rows="5" placeholder="Paste a character's exported JSON here."></textarea>
       <button type="button" id="importBtn" class="io-btn">Import into this token</button>
       <div class="io-note" id="importNote"></div>
     </div>
@@ -760,7 +770,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.18.3";
+  const APP_VERSION = "0.19.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -1571,6 +1581,9 @@
 
       const input = document.createElement("input");
       input.className = "ab-input";
+      input.id = `ab-${a.key}`;
+      input.name = a.key;
+      input.setAttribute("aria-label", `${a.label} base score`);
       input.type = "number";
       input.min = "3";
       input.max = "19";
@@ -1786,6 +1799,26 @@
     state.currentHP = currentHPInput.value === "" ? 0 : (parseInt(currentHPInput.value, 10) || 0);
     persist();
   });
+  // One delegated listener for all the per-level boxes (they are rebuilt when
+  // the class or level changes, so per-box listeners would be lost).
+  document.getElementById("hpInputs").addEventListener("input", (e) => {
+    const inp = e.target.closest(".hp-input");
+    if (!inp) return;
+    const idx = parseInt(inp.dataset.idx, 10);
+    const raw = parseInt(inp.value, 10);
+    const v = clampRoll(state.charClass, idx + 1, raw);
+    if (!isNaN(raw) && v !== raw) {
+      inp.value = v; // pull the box back to what the dice can actually produce
+      hpClampMessage = `L${idx + 1}: ${raw} → ${v} (${diceLabel(state.charClass, idx + 1)} maximum).`;
+    } else {
+      hpClampMessage = "";
+    }
+    const next = state.hpRolls.slice();
+    next[idx] = v;
+    state.hpRolls = next;
+    recompute(["hpRolls"]);
+    persist();
+  });
   // Reads the Max HP that's actually on screen, so "reset to max" can never
   // disagree with what the player is looking at.
   document.getElementById("hpResetBtn").addEventListener("click", () => {
@@ -1932,6 +1965,22 @@
 
   // ---------- Hit Points rendering ----------
 
+  // ---- hit-die limits ----
+  let hpClampMessage = "";
+  let hpClampedByRender = false;
+  const hdSides = (cls) => parseInt(String((LEVEL_ADV[cls] || LEVEL_ADV["Fighter"]).hitDie).replace(/\D/g, ""), 10) || 0;
+  // Printed hit dice at a level ("9+3*" past the cap counts as 9); level 0 has none.
+  const hdCountAt = (cls, level) => {
+    const row = (LEVEL_ADV[cls] || LEVEL_ADV["Fighter"]).rows[level - 1];
+    return row ? (parseInt(String(row.hd), 10) || 0) : 0;
+  };
+  // Dice rolled AT this level: 1 normally, 2 at first level for Rangers and
+  // Monks (who start on 2 HD).
+  const diceAtLevel = (cls, level) => Math.max(1, hdCountAt(cls, level) - hdCountAt(cls, level - 1));
+  const maxRollAtLevel = (cls, level) => diceAtLevel(cls, level) * hdSides(cls);
+  const diceLabel = (cls, level) => `${diceAtLevel(cls, level) > 1 ? diceAtLevel(cls, level) : ""}d${hdSides(cls)}`;
+  const clampRoll = (cls, level, v) => Math.min(Math.max(0, Math.round(Number(v) || 0)), maxRollAtLevel(cls, level));
+
   function renderHP() {
     const lvl = Math.max(1, Math.min(20, Math.round(state.level)));
     document.getElementById("levelDisplay").textContent = lvl;
@@ -1945,6 +1994,17 @@
     // by the SDK (see cloneJSON above).
     const rolls = state.hpRolls.slice(0, rolledLevels);
     while (rolls.length < rolledLevels) rolls.push(0);
+    // A roll can't exceed what the class's dice can produce. Saved or
+    // imported data can already be over the limit, so it is pulled back here
+    // on every load, not only when typing.
+    const clampedNow = [];
+    for (let i = 0; i < rolls.length; i++) {
+      const was = Number(rolls[i]) || 0;
+      const now = clampRoll(state.charClass, i + 1, was);
+      if (now !== was) clampedNow.push(`L${i + 1}: ${was} → ${now} (${diceLabel(state.charClass, i + 1)} maximum)`);
+      rolls[i] = now;
+    }
+    if (clampedNow.length) { hpClampMessage = `Reduced to the dice maximum — ${clampedNow.join(", ")}.`; hpClampedByRender = true; }
     state.hpRolls = rolls;
 
     const conBonus = conHpBonus();
@@ -1963,23 +2023,29 @@
     currentHPInput.value = state.currentHP === null ? 0 : state.currentHP;
 
     const data = LEVEL_ADV[state.charClass] || LEVEL_ADV["Fighter"];
-    let inputsHtml = "";
-    for (let i = 0; i < rolledLevels; i++) {
-      const v = state.hpRolls[i] || "";
-      inputsHtml += `<div class="hp-input-item"><span class="hp-input-label">L${i + 1}</span>`
-        + `<input type="number" min="0" class="hp-input" data-idx="${i}" value="${v}" /></div>`;
-    }
-    document.getElementById("hpInputs").innerHTML = inputsHtml;
-    document.querySelectorAll(".hp-input").forEach(inp => {
-      inp.addEventListener("input", () => {
-        const idx = parseInt(inp.dataset.idx, 10);
-        const next = state.hpRolls.slice();
-        next[idx] = parseInt(inp.value, 10) || 0;
-        state.hpRolls = next;
-        recompute(["hpRolls"]);
-        persist();
+    // Rebuild the boxes only when their shape changes (class or number of
+    // levels). Rebuilding on every keystroke threw away the box being typed
+    // in, so a second digit (a 10 on a d10, a 16 on a Ranger's 2d8) was lost.
+    // Otherwise just refresh values, leaving the focused box alone.
+    const hpBox = document.getElementById("hpInputs");
+    const shapeKey = `${state.charClass}|${rolledLevels}`;
+    if (hpBox.dataset.shape !== shapeKey) {
+      let inputsHtml = "";
+      for (let i = 0; i < rolledLevels; i++) {
+        const v = state.hpRolls[i] || "";
+        const dl = diceLabel(state.charClass, i + 1), mx = maxRollAtLevel(state.charClass, i + 1);
+        inputsHtml += `<div class="hp-input-item"><span class="hp-input-label">L${i + 1}</span>`
+          + `<input type="number" min="0" max="${mx}" class="hp-input" id="hpRoll${i + 1}" name="hpRoll${i + 1}" data-idx="${i}" value="${v}"`
+          + ` placeholder="${dl}" title="Roll ${dl} (maximum ${mx})" aria-label="Level ${i + 1} hit die roll (${dl})" /></div>`;
+      }
+      hpBox.innerHTML = inputsHtml;
+      hpBox.dataset.shape = shapeKey;
+    } else {
+      hpBox.querySelectorAll(".hp-input").forEach((inp, i) => {
+        if (document.activeElement !== inp) inp.value = state.hpRolls[i] || "";
       });
-    });
+    }
+    document.getElementById("hpClampNote").textContent = hpClampMessage;
 
     const parts = [];
     if (rolledLevels > 0) parts.push(`${rolledLevels} rolled die${rolledLevels > 1 ? "s" : ""} (${data.hitDie}): ${rolledSum}`);
@@ -2379,11 +2445,21 @@
     return plain;
   }
 
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  // Status line: the token's text label (its in-game name) or nothing. The
+  // token's *name* is just an Owlbear item name and often says nothing about
+  // the character, so it isn't used here.
+  function linkedStatus(manual, item) {
+    const label = tokenLabelText(item);
+    return `${manual ? "Bound (manual)" : "Linked"}${label ? `: ${label}` : ""}`;
+  }
+
   function renderTokenPanel(item) {
     if (item) {
       const url = item.image?.url;
       tokenImgBox.innerHTML = url
-        ? `<img src="${url}" alt="${item.name || "token"}" />`
+        ? `<img src="${url}" alt="${esc(item.name || "token")}" />`
         : `<span class="placeholder">no image</span>`;
       tokenLabelInput.disabled = false;
       tokenLabelInput.placeholder = "Edit text";
@@ -2481,14 +2557,19 @@
     // the PREVIOUS token's character on screen, and the first edit then
     // copied it onto the new token.
     Object.assign(state, defaultState(), saved ? cloneJSON(saved) : {});
+    hpClampMessage = ""; hpClampedByRender = false;
     syncTopControls();
     recomputeAll();
-    statusEl.textContent = `${manual ? "Bound (manual)" : "Linked"}: ${item.name || item.id}`;
+    // A saved roll above its dice maximum was just pulled back into range
+    // (see renderHP); write the corrected value back so the token matches.
+    const correctedOnLoad = hpClampedByRender; hpClampedByRender = false;
+    statusEl.textContent = linkedStatus(manual, item);
     statusEl.classList.add("linked");
     statusEl.classList.remove("warn");
     renderTokenPanel(item);
     if (saved) setSaveIndicator("ok", "on token ✓", "This token already holds saved sheet data.");
     else setSaveIndicator("idle", "empty token", "Nothing is saved on this token yet — it saves as soon as you change something.");
+    if (correctedOnLoad) persist();
   }
 
   async function refreshSelection() {
@@ -2514,7 +2595,11 @@
   }
 
   async function persist() {
-    if (!obr || !boundItemId) return;
+    if (!obr) return;
+    if (!boundItemId) {
+      if (obr.isAvailable) setSaveIndicator("idle", "not saved", "This sheet isn't linked to a token, so nothing is saved. Select a token, or open the avatar picker and choose “Save this sheet to a token…”.");
+      return;
+    }
     const mine = ++saveSeq; // only the newest save reports its outcome
     try {
       await obr.scene.items.updateItems([boundItemId], (items) => {
@@ -2556,6 +2641,22 @@
     bindUploadInput.value = "";
   }
 
+  // id -> display name for whoever is in the room right now. Owlbear exposes
+  // player names (and ids) but no account login, and only for people who are
+  // currently connected — an offline owner can only be shown by id.
+  async function playerNames() {
+    const names = new Map();
+    try { names.set(obr.player.id, await obr.player.getName()); } catch (e) { /* not ready */ }
+    try { for (const p of await obr.party.getPlayers()) names.set(p.id, p.name); } catch (e) { /* party unavailable */ }
+    return names;
+  }
+  function ownerLabel(item, names) {
+    const id = item.createdUserId;
+    if (!id) return { text: "unknown", tip: "" };
+    if (names.has(id)) return { text: names.get(id) + (id === obr.player.id ? " (you)" : ""), tip: id };
+    return { text: `${id.slice(0, 8)}… (offline)`, tip: `${id} — not connected right now, so no name is available` };
+  }
+
   async function openBindPicker() {
     try {
       await openBindPickerUnsafe();
@@ -2587,30 +2688,33 @@
     let candidates = characterItems.length ? characterItems : items.filter(i => i.type === "IMAGE");
 
     if (!isGM) {
-      // A player sees only tokens they own. createdUserId is confirmed;
-      // it reflects who created the token, which is the default owner —
-      // but Owlbear also lets a GM re-assign ownership afterward via its
-      // own Owner menu, and the field that reflects a *current* (possibly
-      // reassigned) owner hasn't been confirmed against the SDK's actual
-      // types yet. So this can miss a token the GM handed to this player
-      // without having created it for them — noted in the picker itself
-      // if the resulting list comes up empty.
+      // A player sees only tokens they own. An Owlbear item has exactly one
+      // ownership field, createdUserId (the SDK types have no other, and it
+      // is deliberately writable), which the GM's Owner menu is expected to
+      // change on reassignment — so this is the CURRENT owner, not merely
+      // the creator. Verify after a reassignment with the token inspector.
       candidates = candidates.filter(i => i.createdUserId === playerId);
     }
 
     bindPickerNote.textContent = isGM
       ? "Showing every character token in the scene."
       : (candidates.length
-          ? "Showing tokens you created."
-          : "No tokens found that you created. If your GM assigned you one without you creating it, it won't show up here yet.");
+          ? "Showing tokens you own."
+          : "No tokens found that you own. The GM can assign one to you with Owlbear's Owner menu.");
 
-    let html = `<div class="bind-row" id="bindRowAuto"><span class="bind-row-noimg"></span><span class="bind-row-name">Use map selection instead (auto)</span></div>`;
+    const names = await playerNames();
+    let html = `<div class="bind-row" id="bindRowAuto"><span class="bind-row-noimg"></span><span class="bind-row-text"><span class="bind-row-name">Use map selection instead (auto)</span></span></div>`;
     for (const item of candidates) {
       const url = item.image?.url;
-      html += `<div class="bind-row" data-item-id="${item.id}">`;
-      html += url ? `<img src="${url}" alt="" />` : `<span class="bind-row-noimg"></span>`;
-      html += `<span class="bind-row-name">${item.name || "(unnamed)"}</span>`;
-      if (pendingImport) html += `<span class="bind-row-pending">write here</span>`;
+      const own = ownerLabel(item, names);
+      const sheet = item.metadata?.[METADATA_KEY];
+      const cls = sheet && sheet.charClass ? `${sheet.charClass}${sheet.level ? " L" + sheet.level : ""}` : "no sheet";
+      html += `<div class="bind-row" data-item-id="${esc(item.id)}">`;
+      html += url ? `<img src="${esc(url)}" alt="" />` : `<span class="bind-row-noimg"></span>`;
+      // Three separate things: the token's name, its owner, the sheet's class.
+      html += `<span class="bind-row-text"><span class="bind-row-name" title="Token name">${esc(item.name || "(unnamed)")}</span>`
+        + `<span class="bind-row-meta"><span title="${esc(own.tip)}">Owner: ${esc(own.text)}</span> · <span>Class: ${esc(cls)}</span></span></span>`;
+      if (pendingImport) html += `<span class="bind-row-pending">${sheet ? "replaces its data" : "write here"}</span>`;
       html += `</div>`;
     }
     bindPickerList.innerHTML = html;
@@ -2653,7 +2757,7 @@
       // we just wrote).
       boundItemId = itemId;
       manualBindActive = true;
-      statusEl.textContent = `Bound (manual): ${item.name || itemId}`;
+      statusEl.textContent = linkedStatus(true, item);
       statusEl.classList.add("linked");
       statusEl.classList.remove("warn");
       renderTokenPanel(item);
@@ -2663,6 +2767,15 @@
     }
     closeBindPicker();
   }
+
+  // Reuses the upload-and-bind path: the pending payload is simply the sheet
+  // as it is right now, and the next token picked receives it.
+  document.getElementById("bindSaveSheetBtn").addEventListener("click", () => {
+    pendingImport = { _appliedState: cloneJSON(state) };
+    bindUploadStatus.textContent = "Pick a token to write this sheet onto — it replaces whatever that token holds.";
+    bindUploadStatus.className = "io-note io-ok";
+    openBindPicker(); // re-render so rows show where it will be written
+  });
 
   bindUploadInput.addEventListener("change", async () => {
     const file = bindUploadInput.files[0];

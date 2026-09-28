@@ -64,7 +64,11 @@ in the Hit Points section sets it to Max HP.
   effective (ancestry-adjusted) scores and every derived value from Player
   Guide tables 1.1.2–1.1.7.
 - **Hit Points:** per-level hit-die rolls, CON bonus, fixed post-cap bonus,
-  Current HP.
+  Current HP. Each roll box is limited to what its class's dice can produce
+  (d4, d6, d8 or d10 — and 2d8 or 2d4 at first level for Rangers and Monks,
+  who start on 2 HD). A saved or imported roll above its limit is pulled back
+  into range when it loads, with a note, and the corrected value is written
+  back to the token.
 - **Combat Rolls:** the roll needed to hit each AC, melee and missile.
 - **Saving Throws** and **Level Advancement** for all ten classes.
 - **Class Specific** (shown only where they apply): Turning the Undead,
@@ -102,11 +106,21 @@ shows an old version after an update, add a throwaway query string
 **Linking a sheet to a token.**
 - *Automatic:* select exactly one token.
 - *Manual:* click the avatar in the top-right. A GM sees every Character-layer
-  token in the scene; a player sees the tokens they created. (A token a GM
-  later reassigned to a player is not detected — Owlbear's "current owner"
-  field isn't used yet.) "Use map selection instead" returns to automatic.
+  token in the scene; a player sees the tokens they own. Each row shows three
+  separate things: the token's name, its owner, and the sheet's class (the
+  name often says nothing about the character, so it is not used as the
+  status line). The owner is Owlbear's `createdUserId` — the only ownership
+  field an item has, and the one its Owner menu is expected to change when a
+  GM reassigns a token; confirm this with the inspector after a reassignment.
+  Owner names come from the room's player list, so an owner who isn't
+  connected shows as a short id; Owlbear exposes no account login, only a
+  display name and an id. "Use map selection instead" returns to automatic.
 - *Upload and bind:* in the same picker, upload an exported character JSON,
   then choose the token to write it to.
+- *Save this sheet to a token:* also in the picker — writes the sheet as it is
+  now onto a token you choose (rows say "write here" or "replaces its data").
+  Edits made while no token is linked show "not saved" beside the status line,
+  because linking a token starts from that token's own data, not the sheet.
 - The data lives in the token's metadata under
   `com.mogadon.osric-3-char-sheet/state`. The text box under the avatar edits
   the token's own text label (Owlbear's "Edit text").
@@ -138,8 +152,8 @@ names, and rejects anything malformed; a file from a different schema version
 is imported with a note.
 
 **Token-data inspector (debug).** Right-click a token → *Show all data on
-this token (debug)*. It shows who you're viewing as, whether you created the
-token, this extension's saved data, every extension's metadata, and the
+this token (debug)*. It shows who you're viewing as, whether you own the
+token (with the owner's name when they are connected), this extension's saved data, every extension's metadata, and the
 item's other properties. It is switched by one constant,
 `ENABLE_TOKEN_DEBUG_MENU`, at the top of `background.html`: set it to `false`
 and nothing is registered while all the code stays in place. After changing the manifest, re-add the extension so Owlbear picks
