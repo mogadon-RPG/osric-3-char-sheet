@@ -90,7 +90,9 @@ in the Hit Points section sets it to Max HP.
 ## Using it
 
 **Standalone:** open `index.html` in a browser. All calculations work; nothing
-is saved except through Export/Import.
+is saved except through Export/Import. Opened straight from disk (`file://`),
+the browser refuses the SDK module, so the status bar says "Standalone mode"
+and the calculator runs on its own (checked in Chromium).
 
 **In Owlbear Rodeo:** add it as a custom extension using
 `https://mogadon-rpg.github.io/osric-3-char-sheet/manifest.json`. If Owlbear
@@ -140,15 +142,15 @@ this token (debug)*. It shows who you're viewing as, whether you created the
 token, this extension's saved data, every extension's metadata, and the
 item's other properties. It is switched by one constant,
 `ENABLE_TOKEN_DEBUG_MENU`, at the top of `background.html`: set it to `false`
-and nothing is registered (the SDK isn't even loaded) while all the code stays
-in place. After changing the manifest, re-add the extension so Owlbear picks
+and nothing is registered while all the code stays in place. After changing the manifest, re-add the extension so Owlbear picks
 up the background page. The background page logs `[osric-3-char-sheet] ...`
 lines to the browser console saying whether the menu item was registered, or why not.
 
 ## For whoever edits this
 
 - Files: `index.html` (the whole app), `background.html` and `debug.html`
-  (inspector), `manifest.json`, `icon.svg`.
+  (inspector), `manifest.json`, `icon.svg`, `obr-sdk-2.4.0.js` (the Owlbear SDK,
+  pinned and self-hosted) and `THIRD_PARTY_NOTICES.md` (its licences).
 - **The version lives in three places** and must stay in sync:
   `manifest.json` `version`; the `?v=` on all four manifest URLs (icon,
   background, action icon, popover); and `APP_VERSION` in `index.html`.
@@ -161,6 +163,19 @@ lines to the browser console saying whether the menu item was registered, or why
   `state` froze the live HD-rolls array and broke entering rolls after the
   first save. Deep-copy on the way out (`cloneJSON`) and don't mutate arrays
   in place.
+- **The SDK is self-hosted and loaded by a static import, on purpose.** Owlbear
+  sends a one-time `OBR_READY` message when a page's load event fires, and an
+  SDK that isn't loaded and listening by then never hears it — `onReady` then
+  waits forever and the status bar sticks on "Checking for Owlbear Rodeo…".
+  Fetching it with a dynamic `import()` from a CDN made that a race against the
+  CDN's speed (worse with DevTools' "Disable cache" on). A static import of a
+  same-origin file finishes before the load event. `index.html` does it in its
+  own tiny module script so a failed import can't stop the calculator running.
+  To rebuild the bundle: `npm i @owlbear-rodeo/sdk@2.4.0 esbuild`, then
+  `npx esbuild node_modules/@owlbear-rodeo/sdk/lib/index.js --bundle --format=esm
+  --minify --target=es2020 --outfile=obr-sdk-2.4.0.js` (keep the banner comment
+  at the top; if the version changes, rename the file, update the import in the
+  three pages, and regenerate the notices).
 - **Register SDK listeners before awaiting anything, and never let a failure
   be silent.** The selection listener used to be registered only after an
   awaited first refresh, so one failed refresh permanently stopped the sheet
@@ -175,4 +190,5 @@ OSRIC is a trademark of Matthew Finch and Stuart Marshall, used with
 permission. This work includes AELF Open Gaming Content, used under the AELF
 Open License version 1.0a, and is not endorsed by Mythmere Games LLC or any
 other contributor. This tool's own code is an unofficial fan work by Mogadon.
-The full notice is in the sheet's footer.
+The full notice is in the sheet's footer. The bundled Owlbear SDK and its
+dependencies are MIT / BSD-3-Clause licensed; see `THIRD_PARTY_NOTICES.md`.

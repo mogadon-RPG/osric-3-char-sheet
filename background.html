@@ -6,18 +6,24 @@
 </head>
 <body>
 <script type="module">
+  // Static import, deliberately: the SDK must already be loaded when this
+  // page's load event fires, because that's when Owlbear sends its one-time
+  // OBR_READY message (see the comment in index.html).
+  import OBR from "./obr-sdk-2.4.0.js";
+
   // Runs invisibly for the whole room (Owlbear loads it from the manifest's
   // background_url). Its only job right now is registering the right-click
   // "show all data on this token" item.
   //
   // ------------------------------------------------------------------
   // SWITCH: set to false to turn the token-data inspector off. Nothing is
-  // registered and the Owlbear SDK isn't even loaded — but every line of
-  // this file, and debug.html, stays in place for when it's needed again.
+  // registered, but every line of this file, and debug.html, stays in place
+  // for when it's needed again.
   const ENABLE_TOKEN_DEBUG_MENU = true;
   // ------------------------------------------------------------------
 
   const ID = "com.mogadon.osric-3-char-sheet";
+  const log = (...a) => console.info("[osric-3-char-sheet]", ...a);
 
   // The manifest hands this page ?v=<version>. Reusing it for the pages
   // and icon opened from here means the manifest stays the single source of
@@ -26,12 +32,9 @@
   const base = new URL(".", location.href).href;
   const asset = (file, extra = "") => `${base}${file}?v=${encodeURIComponent(v)}${extra}`;
 
-  const log = (...a) => console.info("[osric-3-char-sheet]", ...a);
-
   if (!ENABLE_TOKEN_DEBUG_MENU) {
     log("token-data inspector is switched off (ENABLE_TOKEN_DEBUG_MENU = false)");
-  } else try {
-    const OBR = (await import("https://esm.sh/@owlbear-rodeo/sdk@2")).default;
+  } else {
     log(`background page loaded (v${v})`);
     OBR.onReady(() => {
       OBR.contextMenu.create({
@@ -59,8 +62,6 @@
       });
       log("token-data inspector registered");
     });
-  } catch (e) {
-    console.error("[osric-3-char-sheet] token-data inspector NOT registered:", e);
   }
 </script>
 </body>

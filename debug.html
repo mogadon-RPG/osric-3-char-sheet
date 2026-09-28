@@ -67,6 +67,8 @@
 </div>
 
 <script type="module">
+  import OBR from "./obr-sdk-2.4.0.js"; // static import: must be loaded before the page load event (see index.html)
+
   const MODAL_ID = "com.mogadon.osric-3-char-sheet/token-data-modal";
   const OUR_KEY = "com.mogadon.osric-3-char-sheet/state";
   const itemId = new URLSearchParams(location.search).get("itemId");
@@ -79,7 +81,6 @@
   const copyBtn = document.getElementById("copyBtn");
   const pretty = (v) => JSON.stringify(v, null, 2);
 
-  let OBR = null;
   let lastDump = "";
 
   function addFact(k, v) {
@@ -146,21 +147,13 @@
     if (OBR && OBR.isAvailable && itemId) render();
   });
 
-  try {
-    OBR = (await import("https://esm.sh/@owlbear-rodeo/sdk@2")).default;
-  } catch (e) {
-    msg.textContent = "Couldn't load the Owlbear SDK.";
+  if (!OBR.isAvailable) {
+    msg.textContent = "Open this from Owlbear Rodeo's right-click menu on a token.";
+  } else if (!itemId) {
+    msg.textContent = "No token was specified.";
     msg.className = "note err";
-  }
-  if (OBR) {
-    if (!OBR.isAvailable) {
-      msg.textContent = "Open this from Owlbear Rodeo's right-click menu on a token.";
-    } else if (!itemId) {
-      msg.textContent = "No token was specified.";
-      msg.className = "note err";
-    } else {
-      OBR.onReady(render);
-    }
+  } else {
+    OBR.onReady(render);
   }
 </script>
 </body>

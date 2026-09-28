@@ -746,10 +746,21 @@
 </div>
 
 
+<!-- The Owlbear SDK MUST already be loaded when this page's load event fires:
+     Owlbear sends its one-time OBR_READY message then, and an SDK that arrives
+     later (e.g. a dynamic import() from a CDN) never hears it, so the sheet
+     sits on "Checking for Owlbear Rodeo…" forever. A static import guarantees
+     it. It's a separate script so that if the import fails (e.g. the page is
+     opened straight from disk) the calculator below still runs. -->
+<script type="module">
+  import OBR from "./obr-sdk-2.4.0.js";
+  window.__OBR__ = OBR;
+</script>
+
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.18.2";
+  const APP_VERSION = "0.18.3";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -2428,11 +2439,9 @@
   }
 
   async function tryConnectOBR() {
-    try {
-      const mod = await import("https://esm.sh/@owlbear-rodeo/sdk@2");
-      obr = mod.default;
-    } catch (e) {
-      statusEl.textContent = "Standalone mode — SDK not reachable, calculations only, nothing is saved.";
+    obr = window.__OBR__ || null; // loaded by the static-import script near the top of the page
+    if (!obr) {
+      statusEl.textContent = "Standalone mode — the Owlbear SDK didn't load, calculations only, nothing is saved.";
       statusEl.classList.add("warn");
       return;
     }
@@ -2450,6 +2459,14 @@
       try { obr.scene.items.onChange(onItemsChanged); } catch (e) { /* scene not ready; label just won't live-update */ }
       refreshSelection();
     });
+    // If Owlbear never says it's ready, say so instead of sitting on
+    // "Checking…" forever.
+    setTimeout(() => {
+      if (!obr.isReady) {
+        statusEl.textContent = "Owlbear hasn't responded to this panel yet — reload the room if this doesn't clear.";
+        statusEl.classList.add("warn");
+      }
+    }, 8000);
   }
 
   // Shared by the automatic (map-selection) path and the manual bind
