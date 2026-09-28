@@ -176,8 +176,15 @@ lines to the browser console saying whether the menu item was registered, or why
 ## For whoever edits this
 
 - Files: `index.html` (the whole app), `background.html` and `debug.html`
-  (inspector), `manifest.json`, `icon.svg`, `obr-sdk-2.4.0.js` (the Owlbear SDK,
-  pinned and self-hosted) and `THIRD_PARTY_NOTICES.md` (its licences).
+  (inspector), `manifest.json`, `obr-sdk-2.4.0.js` (the Owlbear SDK, pinned and
+  self-hosted), `THIRD_PARTY_NOTICES.md` (its licences), and TWO icon files:
+  `icon.svg` (solid background — the manifest's top-level `icon` and the
+  context-menu icon in `background.html`) and `action-icon.svg` (transparent
+  background — only `manifest.json`'s `action.icon`, the button shown at the
+  top-left of the room alongside other extensions' action buttons, which
+  reads as a plain filled square if given a fully opaque icon; letters are
+  hand-built angular polygons rather than `<text>`, so there's no dependency
+  on any font being installed).
 - **The version lives in three places** and must stay in sync:
   `manifest.json` `version`; the `?v=` on all four manifest URLs (icon,
   background, action icon, popover); and `APP_VERSION` in `index.html`.
