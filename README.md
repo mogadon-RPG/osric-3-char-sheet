@@ -180,9 +180,11 @@ lines to the browser console saying whether the menu item was registered, or why
   self-hosted), `THIRD_PARTY_NOTICES.md` (its licences), and TWO icon files:
   `icon.svg` (solid background — the manifest's top-level `icon` and the
   context-menu icon in `background.html`) and `action-icon.svg` (transparent
-  background — only `manifest.json`'s `action.icon`, the button shown at the
-  top-left of the room alongside other extensions' action buttons, which
-  reads as a plain filled square if given a fully opaque icon; letters are
+  background, a compact "O3" mark rather than the full wordmark — only
+  `manifest.json`'s `action.icon`, the button shown at the top-left of the
+  room alongside other extensions' action buttons. That row renders icons
+  as a single-colour mask, ignoring their actual fill colours, and a fully
+  opaque icon there rendered as a plain filled square; letters are
   hand-built angular polygons rather than `<text>`, so there's no dependency
   on any font being installed).
 - **The version lives in three places** and must stay in sync:
