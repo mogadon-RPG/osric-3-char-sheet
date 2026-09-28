@@ -148,9 +148,22 @@
     padding: 4px 8px;
     border: 1px solid var(--rule);
     background: var(--paper-dim);
-    margin-bottom: 8px;
+    margin-bottom: 0;
     border-radius: 2px;
   }
+  .status-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
+  .status-row #status { flex: 1 1 auto; min-width: 0; }
+  /* Space is always reserved (visibility, not display) so the indicator
+     appearing never makes the layout jump. */
+  .save-indicator {
+    flex: 0 0 auto; min-width: 78px; text-align: center; white-space: nowrap;
+    font-size: 0.68rem; padding: 4px 6px; border: 1px solid var(--rule);
+    border-radius: 2px; background: var(--paper-dim); color: var(--ink-soft);
+    visibility: hidden;
+  }
+  .save-indicator.show { visibility: visible; }
+  .save-indicator.ok { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .save-indicator.bad { border-color: var(--warn); color: var(--warn); font-weight: 600; }
   #status.linked { border-color: var(--accent); background: var(--accent-soft); }
   #status.warn { border-color: var(--warn); color: var(--warn); }
 
@@ -532,7 +545,7 @@
   <div class="top-left">
     <h1>OSRIC 3.0 Character Sheet</h1>
 
-    <div id="status">Checking for Owlbear Rodeo…</div>
+    <div class="status-row"><div id="status">Checking for Owlbear Rodeo…</div><div id="saveIndicator" class="save-indicator" aria-live="polite"></div></div>
 
     <div class="flags">
       <label>Ancestry <select id="charAncestry" class="mv-select"></select></label>
@@ -736,7 +749,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.18.1";
+  const APP_VERSION = "0.18.2";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -2303,6 +2316,32 @@
   // is choosing which token to write it to (upload-and-bind flow).
   let pendingImport = null;
 
+  // Says out loud whether this token actually holds the sheet's data, so it
+  // is never a mystery: "on token" (it already had data), "empty token"
+  // (nothing saved yet), "saved" (last change was written), "NOT saved"
+  // (Owlbear refused the write). Hidden when no token is bound.
+  const saveIndicator = document.getElementById("saveIndicator");
+  let saveSeq = 0;
+  function setSaveIndicator(kind, text, tip) {
+    if (!kind) {
+      saveIndicator.className = "save-indicator";
+      saveIndicator.textContent = "";
+      saveIndicator.title = "";
+      return;
+    }
+    saveIndicator.className = `save-indicator show ${kind}`;
+    saveIndicator.textContent = text;
+    saveIndicator.title = tip || "";
+  }
+  // Failures used to vanish into the console (or into an unhandled promise
+  // rejection). Show them in the panel instead.
+  function reportProblem(what, e) {
+    console.error("[osric-3-char-sheet]", what, e);
+    statusEl.textContent = `${what}: ${e && e.message ? e.message : e}`;
+    statusEl.classList.add("warn");
+    statusEl.classList.remove("linked");
+  }
+
   // The text under a token on the map is the Image item's `text` (what
   // Owlbear's own "Edit text" edits). It can be stored as PLAIN text or as
   // RICH text (Slate-style nodes), so reading handles both.
@@ -2402,10 +2441,14 @@
       statusEl.classList.add("warn");
       return;
     }
-    obr.onReady(async () => {
-      await refreshSelection();
+    obr.onReady(() => {
+      // Listeners are registered BEFORE the first refresh. They used to be
+      // registered after an awaited refresh, so any error in that first
+      // refresh (scene not ready, token unreadable) meant the sheet silently
+      // never followed the map selection again.
       obr.player.onChange(refreshSelection);
       try { obr.scene.items.onChange(onItemsChanged); } catch (e) { /* scene not ready; label just won't live-update */ }
+      refreshSelection();
     });
   }
 
@@ -2427,32 +2470,49 @@
     statusEl.classList.add("linked");
     statusEl.classList.remove("warn");
     renderTokenPanel(item);
+    if (saved) setSaveIndicator("ok", "on token ✓", "This token already holds saved sheet data.");
+    else setSaveIndicator("idle", "empty token", "Nothing is saved on this token yet — it saves as soon as you change something.");
   }
 
   async function refreshSelection() {
-    if (manualBindActive) return; // a manual pick overrides map selection
-    const selection = await obr.player.getSelection();
-    if (!selection || selection.length !== 1) {
-      boundItemId = null;
-      statusEl.textContent = "Select exactly one token to link this sheet to it.";
-      statusEl.classList.remove("linked");
-      renderTokenPanel(null);
-      return;
+    try {
+      if (manualBindActive) return; // a manual pick overrides map selection
+      const selection = await obr.player.getSelection();
+      if (!selection || selection.length !== 1) {
+        boundItemId = null;
+        statusEl.textContent = "Select exactly one token to link this sheet to it.";
+        statusEl.classList.remove("linked", "warn");
+        renderTokenPanel(null);
+        setSaveIndicator(null);
+        return;
+      }
+      if (selection[0] === boundItemId) return; // already showing this token
+      const items = await obr.scene.items.getItems([selection[0]]);
+      const item = items[0];
+      if (!item) return;
+      await loadFromItem(item);
+    } catch (e) {
+      reportProblem("Couldn't read the selected token", e);
     }
-    if (selection[0] === boundItemId) return; // already showing this token
-    const items = await obr.scene.items.getItems([selection[0]]);
-    const item = items[0];
-    if (!item) return;
-    await loadFromItem(item);
   }
 
   async function persist() {
     if (!obr || !boundItemId) return;
-    await obr.scene.items.updateItems([boundItemId], (items) => {
-      for (const item of items) {
-        item.metadata[METADATA_KEY] = cloneJSON(state);
+    const mine = ++saveSeq; // only the newest save reports its outcome
+    try {
+      await obr.scene.items.updateItems([boundItemId], (items) => {
+        for (const item of items) {
+          item.metadata[METADATA_KEY] = cloneJSON(state);
+        }
+      });
+      if (mine === saveSeq) setSaveIndicator("ok", "saved ✓", `Written to this token at ${new Date().toLocaleTimeString()}.`);
+    } catch (e) {
+      console.error("[osric-3-char-sheet] save failed", e);
+      if (mine === saveSeq) {
+        setSaveIndicator("bad", "NOT saved ⚠",
+          `Owlbear refused the update (${e && e.message ? e.message : e}). If this room uses Owner Only, only the token's owner or the GM can change it.`);
       }
-    });
+    }
   }
 
   // ---------- Manual bind picker ----------
@@ -2480,6 +2540,15 @@
   }
 
   async function openBindPicker() {
+    try {
+      await openBindPickerUnsafe();
+    } catch (e) {
+      console.error("[osric-3-char-sheet] token picker failed", e);
+      bindPickerList.innerHTML = "";
+      bindPickerNote.textContent = `Couldn't list tokens: ${e && e.message ? e.message : e}`;
+    }
+  }
+  async function openBindPickerUnsafe() {
     bindPicker.style.display = "";
     bindPickerList.innerHTML = `<div class="bind-picker-note">Loading…</div>`;
     if (!obr || !obr.isAvailable) {
@@ -2541,6 +2610,14 @@
   }
 
   async function onBindRowClick(itemId) {
+    try {
+      await onBindRowClickUnsafe(itemId);
+    } catch (e) {
+      console.error("[osric-3-char-sheet] bind failed", e);
+      bindPickerNote.textContent = `Couldn't bind to that token: ${e && e.message ? e.message : e}`;
+    }
+  }
+  async function onBindRowClickUnsafe(itemId) {
     if (pendingImport) {
       const payload = pendingImport;
       await obr.scene.items.updateItems([itemId], (items) => {
@@ -2563,6 +2640,7 @@
       statusEl.classList.add("linked");
       statusEl.classList.remove("warn");
       renderTokenPanel(item);
+      setSaveIndicator("ok", "saved ✓", `Uploaded character written to this token at ${new Date().toLocaleTimeString()}.`);
     } else {
       await loadFromItem(item, { manual: true });
     }

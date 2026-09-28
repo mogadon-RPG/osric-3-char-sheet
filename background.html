@@ -26,8 +26,13 @@
   const base = new URL(".", location.href).href;
   const asset = (file, extra = "") => `${base}${file}?v=${encodeURIComponent(v)}${extra}`;
 
-  if (ENABLE_TOKEN_DEBUG_MENU) {
+  const log = (...a) => console.info("[osric-3-char-sheet]", ...a);
+
+  if (!ENABLE_TOKEN_DEBUG_MENU) {
+    log("token-data inspector is switched off (ENABLE_TOKEN_DEBUG_MENU = false)");
+  } else try {
     const OBR = (await import("https://esm.sh/@owlbear-rodeo/sdk@2")).default;
+    log(`background page loaded (v${v})`);
     OBR.onReady(() => {
       OBR.contextMenu.create({
         id: `${ID}/token-data`,
@@ -37,7 +42,8 @@
             label: "Show all data on this token (debug)",
             // Any single selected item — not just Character-layer tokens —
             // so it can be pointed at anything when something looks off.
-            filter: { max: 1 },
+            // Both roles named explicitly rather than relying on a default.
+            filter: { max: 1, roles: ["GM", "PLAYER"] },
           },
         ],
         onClick(context) {
@@ -51,7 +57,10 @@
           });
         },
       });
+      log("token-data inspector registered");
     });
+  } catch (e) {
+    console.error("[osric-3-char-sheet] token-data inspector NOT registered:", e);
   }
 </script>
 </body>

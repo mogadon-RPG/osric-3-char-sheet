@@ -110,6 +110,12 @@ shows an old version after an update, add a throwaway query string
   the token's own text label (Owlbear's "Edit text").
   Binding to a token with no saved data starts a blank default character, and
   nothing is written to a token until something on the sheet is edited.
+  A small indicator beside the status line says whether the token holds your
+  data: *on token ✓* (it already had data), *empty token* (nothing saved yet),
+  *saved ✓* (the last change was written) or *NOT saved ⚠* (Owlbear refused the
+  write — hover for the reason; in a room using Owner Only, only the token's
+  owner or the GM can change it). Failures reading or listing tokens are shown
+  in the panel too, not just in the console.
 
 **Export / Import.** The exported JSON is a nested, versioned contract whose
 key names are deliberately independent of the code's internal names:
@@ -136,7 +142,8 @@ item's other properties. It is switched by one constant,
 `ENABLE_TOKEN_DEBUG_MENU`, at the top of `background.html`: set it to `false`
 and nothing is registered (the SDK isn't even loaded) while all the code stays
 in place. After changing the manifest, re-add the extension so Owlbear picks
-up the background page.
+up the background page. The background page logs `[osric-3-char-sheet] ...`
+lines to the browser console saying whether the menu item was registered, or why not.
 
 ## For whoever edits this
 
@@ -154,6 +161,11 @@ up the background page.
   `state` froze the live HD-rolls array and broke entering rolls after the
   first save. Deep-copy on the way out (`cloneJSON`) and don't mutate arrays
   in place.
+- **Register SDK listeners before awaiting anything, and never let a failure
+  be silent.** The selection listener used to be registered only after an
+  awaited first refresh, so one failed refresh permanently stopped the sheet
+  following the map (the status bar stuck on "Checking for Owlbear Rodeo…").
+  Errors now surface in the panel.
 - A syntax check alone is not enough — run the page. A `const` read before
   its declaration parses fine and only fails when the page actually executes.
 
