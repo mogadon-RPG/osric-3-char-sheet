@@ -82,6 +82,59 @@
     white-space: nowrap;
   }
   .token-name.linked { color: var(--ink); font-weight: 600; }
+  .token-img-box { cursor: pointer; }
+
+  .bind-picker {
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    background: var(--paper);
+    margin-bottom: 8px;
+    padding: 8px;
+    max-height: 260px;
+    display: flex;
+    flex-direction: column;
+  }
+  .bind-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+  }
+  .bind-picker-close {
+    border: none;
+    background: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--ink-soft);
+    padding: 0 4px;
+  }
+  .bind-picker-upload { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .bind-upload-btn { display: inline-block; cursor: pointer; }
+  .bind-picker-note {
+    font-size: 0.65rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+  .bind-picker-list { overflow-y: auto; flex: 1 1 auto; }
+  .bind-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 2px;
+    border-top: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .bind-row:first-child { border-top: none; }
+  .bind-row:hover { background: var(--paper-dim); }
+  .bind-row img, .bind-row .bind-row-noimg {
+    width: 28px; height: 28px; border-radius: 3px; object-fit: cover;
+    flex: 0 0 auto; background: var(--paper-dim);
+  }
+  .bind-row-name { font-size: 0.75rem; flex: 1 1 auto; }
+  .bind-row-pending { color: var(--accent); font-size: 0.65rem; font-weight: 700; }
 
   #status {
     font-size: 0.68rem;
@@ -476,11 +529,25 @@
   </div>
 
   <div class="token-panel">
-    <div class="token-img-box" id="tokenImgBox">
+    <div class="token-img-box" id="tokenImgBox" title="Click to bind to a different token">
       <span class="placeholder">no token</span>
     </div>
     <div class="token-name" id="tokenNameEl">—</div>
   </div>
+</div>
+
+<div class="bind-picker" id="bindPicker" style="display:none;">
+  <div class="bind-picker-header">
+    Bind to token
+    <button type="button" class="bind-picker-close" id="bindPickerClose">✕</button>
+  </div>
+  <div class="bind-picker-upload">
+    <label for="bindUploadInput" class="io-btn bind-upload-btn">Upload character JSON…</label>
+    <input type="file" id="bindUploadInput" accept="application/json,.json" style="display:none;" />
+    <span id="bindUploadStatus"></span>
+  </div>
+  <div class="bind-picker-note" id="bindPickerNote"></div>
+  <div class="bind-picker-list" id="bindPickerList"></div>
 </div>
 
 <div class="mv-row">
@@ -656,7 +723,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.15.0";
+  const APP_VERSION = "0.16.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -2134,6 +2201,19 @@
     }
   });
 
+  // Applies an already-validated import payload to `state` and syncs the
+  // UI. Shared by the paste-JSON import button and the upload-and-bind
+  // picker, so there's one place that has to know how the external schema
+  // maps onto internal state.
+  function applyImportedPayload(parsed) {
+    for (const [ext, key] of FIELD_MAP) state[key] = getPath(parsed, ext);
+    syncTopControls();
+    recomputeAll();
+    return parsed.schemaVersion !== SCHEMA_VERSION
+      ? `schema v${parsed.schemaVersion} (this sheet is on v${SCHEMA_VERSION}) — imported anyway since all known fields checked out, but double-check the result.`
+      : null;
+  }
+
   importBtn.addEventListener("click", () => {
     let parsed;
     try {
@@ -2149,16 +2229,14 @@
       importNote.className = "io-note io-error";
       return;
     }
-    if (parsed.schemaVersion !== SCHEMA_VERSION) {
-      importNote.textContent = `Note: this was exported from schema v${parsed.schemaVersion}, this sheet is on v${SCHEMA_VERSION} — imported anyway since all known fields checked out, but double-check the result.`;
+    const versionNote = applyImportedPayload(parsed);
+    if (versionNote) {
+      importNote.textContent = `Note: this was exported from ${versionNote}`;
       importNote.className = "io-note";
     } else {
       importNote.textContent = "Imported.";
       importNote.className = "io-note io-ok";
     }
-    for (const [ext, key] of FIELD_MAP) state[key] = getPath(parsed, ext);
-    syncTopControls();
-    recomputeAll();
     persist();
   });
 
@@ -2169,9 +2247,23 @@
   const statusEl = document.getElementById("status");
   const tokenImgBox = document.getElementById("tokenImgBox");
   const tokenNameEl = document.getElementById("tokenNameEl");
+  const bindPicker = document.getElementById("bindPicker");
+  const bindPickerList = document.getElementById("bindPickerList");
+  const bindPickerNote = document.getElementById("bindPickerNote");
+  const bindPickerClose = document.getElementById("bindPickerClose");
+  const bindUploadInput = document.getElementById("bindUploadInput");
+  const bindUploadStatus = document.getElementById("bindUploadStatus");
   const METADATA_KEY = "com.mogadon.osric-3-char-sheet/state";
   let obr = null;
   let boundItemId = null;
+  // Once true, map-selection changes (obr.player.onChange) no longer
+  // auto-rebind the sheet — a manual pick from the bind picker overrides
+  // the automatic "exactly one token selected" behaviour until the user
+  // explicitly picks "Use map selection instead" from the picker again.
+  let manualBindActive = false;
+  // Holds a validated-but-not-yet-applied import payload while the user
+  // is choosing which token to write it to (upload-and-bind flow).
+  let pendingImport = null;
 
   function renderTokenPanel(item) {
     if (item) {
@@ -2208,7 +2300,26 @@
     });
   }
 
+  // Shared by the automatic (map-selection) path and the manual bind
+  // picker: loads whatever's already saved on `item`, if anything, into
+  // `state`, and updates the token panel + status line.
+  async function loadFromItem(item, { manual } = {}) {
+    boundItemId = item.id;
+    manualBindActive = !!manual;
+    const saved = item.metadata?.[METADATA_KEY];
+    if (saved) {
+      Object.assign(state, saved);
+      syncTopControls();
+      recomputeAll();
+    }
+    statusEl.textContent = `${manual ? "Bound (manual)" : "Linked"}: ${item.name || item.id}`;
+    statusEl.classList.add("linked");
+    statusEl.classList.remove("warn");
+    renderTokenPanel(item);
+  }
+
   async function refreshSelection() {
+    if (manualBindActive) return; // a manual pick overrides map selection
     const selection = await obr.player.getSelection();
     if (!selection || selection.length !== 1) {
       boundItemId = null;
@@ -2217,19 +2328,10 @@
       renderTokenPanel(null);
       return;
     }
-    boundItemId = selection[0];
-    const items = await obr.scene.items.getItems([boundItemId]);
+    const items = await obr.scene.items.getItems([selection[0]]);
     const item = items[0];
-    const saved = item?.metadata?.[METADATA_KEY];
-    if (saved) {
-      Object.assign(state, saved);
-      syncTopControls();
-      recomputeAll();
-    }
-    statusEl.textContent = `Linked: ${item?.name || boundItemId}`;
-    statusEl.classList.add("linked");
-    statusEl.classList.remove("warn");
-    renderTokenPanel(item || null);
+    if (!item) return;
+    await loadFromItem(item);
   }
 
   async function persist() {
@@ -2240,6 +2342,144 @@
       }
     });
   }
+
+  // ---------- Manual bind picker ----------
+  // Backlogged as two parallel processes that turn out to share one UI:
+  // (a) upload a JSON character file and hand-bind it to a token, and
+  // (b) bind to an existing token directly (bypassing map-selection).
+  // Both end at "pick a token from a list" — they only differ in whether
+  // an upload preceded the pick (write the upload to that token) or not
+  // (just load whatever's already on it, same as the automatic path).
+
+  tokenImgBox.addEventListener("click", () => {
+    if (bindPicker.style.display === "none") {
+      openBindPicker();
+    } else {
+      closeBindPicker();
+    }
+  });
+  bindPickerClose.addEventListener("click", closeBindPicker);
+
+  function closeBindPicker() {
+    bindPicker.style.display = "none";
+    pendingImport = null;
+    bindUploadStatus.textContent = "";
+    bindUploadInput.value = "";
+  }
+
+  async function openBindPicker() {
+    bindPicker.style.display = "";
+    bindPickerList.innerHTML = `<div class="bind-picker-note">Loading…</div>`;
+    if (!obr || !obr.isAvailable) {
+      bindPickerList.innerHTML = "";
+      bindPickerNote.textContent = "Manual binding needs Owlbear Rodeo — not available in standalone mode.";
+      return;
+    }
+
+    const role = await obr.player.getRole();
+    const isGM = role === "GM";
+    const playerId = obr.player.id;
+
+    let items = await obr.scene.items.getItems();
+    const characterItems = items.filter(i => i.layer === "CHARACTER");
+    // Defensive: if filtering by layer somehow yields nothing (e.g. an
+    // unconfirmed layer-name mismatch against a future SDK version), fall
+    // back to showing every image item rather than an empty, broken-
+    // looking list — see the note below on why this filter is unverified.
+    let candidates = characterItems.length ? characterItems : items.filter(i => i.type === "IMAGE");
+
+    if (!isGM) {
+      // A player sees only tokens they own. createdUserId is confirmed;
+      // it reflects who created the token, which is the default owner —
+      // but Owlbear also lets a GM re-assign ownership afterward via its
+      // own Owner menu, and the field that reflects a *current* (possibly
+      // reassigned) owner hasn't been confirmed against the SDK's actual
+      // types yet. So this can miss a token the GM handed to this player
+      // without having created it for them — noted in the picker itself
+      // if the resulting list comes up empty.
+      candidates = candidates.filter(i => i.createdUserId === playerId);
+    }
+
+    bindPickerNote.textContent = isGM
+      ? "Showing every character token in the scene."
+      : (candidates.length
+          ? "Showing tokens you created."
+          : "No tokens found that you created. If your GM assigned you one without you creating it, it won't show up here yet.");
+
+    let html = `<div class="bind-row" id="bindRowAuto"><span class="bind-row-noimg"></span><span class="bind-row-name">Use map selection instead (auto)</span></div>`;
+    for (const item of candidates) {
+      const url = item.image?.url;
+      html += `<div class="bind-row" data-item-id="${item.id}">`;
+      html += url ? `<img src="${url}" alt="" />` : `<span class="bind-row-noimg"></span>`;
+      html += `<span class="bind-row-name">${item.name || "(unnamed)"}</span>`;
+      if (pendingImport) html += `<span class="bind-row-pending">write here</span>`;
+      html += `</div>`;
+    }
+    bindPickerList.innerHTML = html;
+
+    document.getElementById("bindRowAuto").addEventListener("click", () => {
+      manualBindActive = false;
+      closeBindPicker();
+      refreshSelection();
+    });
+    for (const row of bindPickerList.querySelectorAll(".bind-row[data-item-id]")) {
+      row.addEventListener("click", () => onBindRowClick(row.dataset.itemId));
+    }
+  }
+
+  async function onBindRowClick(itemId) {
+    if (pendingImport) {
+      const payload = pendingImport;
+      await obr.scene.items.updateItems([itemId], (items) => {
+        for (const item of items) {
+          item.metadata[METADATA_KEY] = { ...payload._appliedState };
+        }
+      });
+    }
+    const items = await obr.scene.items.getItems([itemId]);
+    const item = items[0];
+    if (!item) return;
+    if (pendingImport) {
+      // Write-then-bind: the state was already applied to the sheet by
+      // the upload handler, so this just adopts the token as bound to it
+      // (skip re-loading from metadata — what's on the token now is what
+      // we just wrote).
+      boundItemId = itemId;
+      manualBindActive = true;
+      statusEl.textContent = `Bound (manual): ${item.name || itemId}`;
+      statusEl.classList.add("linked");
+      statusEl.classList.remove("warn");
+      renderTokenPanel(item);
+    } else {
+      await loadFromItem(item, { manual: true });
+    }
+    closeBindPicker();
+  }
+
+  bindUploadInput.addEventListener("change", async () => {
+    const file = bindUploadInput.files[0];
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch (e) {
+      bindUploadStatus.textContent = "That file isn't valid JSON.";
+      bindUploadStatus.className = "io-note io-error";
+      return;
+    }
+    const errors = validateImportPayload(parsed);
+    if (errors.length) {
+      bindUploadStatus.innerHTML = "Rejected — " + errors.join(" ");
+      bindUploadStatus.className = "io-note io-error";
+      return;
+    }
+    applyImportedPayload(parsed);
+    parsed._appliedState = { ...state };
+    pendingImport = parsed;
+    bindUploadStatus.textContent = `Loaded ${parsed.character.charClass} (${parsed.character.ancestry}) — pick a token below to write it to.`;
+    bindUploadStatus.className = "io-note io-ok";
+    openBindPicker(); // re-render so rows now show "write here"
+  });
 
   tryConnectOBR();
 </script>
