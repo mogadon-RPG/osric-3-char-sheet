@@ -72,16 +72,22 @@
     line-height: 1.15;
     padding: 2px;
   }
-  .token-name {
+  .token-label-input {
+    box-sizing: border-box;
+    width: 72px;
+    font-family: inherit;
     font-size: 0.62rem;
-    color: var(--ink-soft);
-    max-width: 68px;
+    color: var(--ink);
+    font-weight: 600;
     text-align: center;
-    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: #fff;
+    padding: 2px 3px;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  .token-name.linked { color: var(--ink); font-weight: 600; }
+  .token-label-input:disabled { background: var(--paper-dim); color: var(--ink-soft); font-weight: 400; }
+  .token-label-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .token-img-box { cursor: pointer; }
 
   .bind-picker {
@@ -532,7 +538,7 @@
     <div class="token-img-box" id="tokenImgBox" title="Click to bind to a different token">
       <span class="placeholder">no token</span>
     </div>
-    <div class="token-name" id="tokenNameEl">—</div>
+    <input type="text" class="token-label-input" id="tokenLabelInput" placeholder="—" disabled maxlength="60" title="The text label shown under this token on the map (the same text as Owlbear's own Edit text)" />
   </div>
 </div>
 
@@ -572,7 +578,7 @@
     <span class="mv-label">Shield</span>
     <select id="shieldSelect" class="mv-select"></select>
   </div>
-  <div class="major-value">
+  <div class="major-value mv-readout">
     <span class="mv-label">AC</span>
     <span class="mv-value" id="acAscDisplay">10</span>
   </div>
@@ -723,7 +729,7 @@
 <script type="module">
   // Kept in sync by hand with manifest.json's "version" — no build step ties
   // these together, so bumping one means bumping the other too.
-  const APP_VERSION = "0.16.0";
+  const APP_VERSION = "0.17.0";
   document.getElementById("versionTag").textContent = `v${APP_VERSION}`;
 
   // ---------- OSRIC 3.0 ability tables (Player Guide 1.1.2–1.1.7) ----------
@@ -2246,7 +2252,7 @@
 
   const statusEl = document.getElementById("status");
   const tokenImgBox = document.getElementById("tokenImgBox");
-  const tokenNameEl = document.getElementById("tokenNameEl");
+  const tokenLabelInput = document.getElementById("tokenLabelInput");
   const bindPicker = document.getElementById("bindPicker");
   const bindPickerList = document.getElementById("bindPickerList");
   const bindPickerNote = document.getElementById("bindPickerNote");
@@ -2265,18 +2271,88 @@
   // is choosing which token to write it to (upload-and-bind flow).
   let pendingImport = null;
 
+  // The text under a token on the map is the Image item's `text` (what
+  // Owlbear's own "Edit text" edits). It can be stored as PLAIN text or as
+  // RICH text (Slate-style nodes), so reading handles both.
+  function flattenRichText(nodes) {
+    if (!Array.isArray(nodes)) return "";
+    // Inline runs inside one block join with nothing; separate top-level
+    // blocks (paragraphs) join with a space.
+    const inline = (kids) => kids
+      .map(k => (typeof k.text === "string" ? k.text : inline(k.children || [])))
+      .join("");
+    return nodes
+      .map(n => (typeof n.text === "string" ? n.text : inline(n.children || [])))
+      .join(" ")
+      .trim();
+  }
+  function tokenLabelText(item) {
+    const t = item && item.text;
+    if (!t) return "";
+    const plain = typeof t.plainText === "string" ? t.plainText : "";
+    if (t.type === "RICH" || !plain) {
+      const rich = flattenRichText(t.richText);
+      if (rich) return rich;
+    }
+    return plain;
+  }
+
   function renderTokenPanel(item) {
     if (item) {
       const url = item.image?.url;
       tokenImgBox.innerHTML = url
         ? `<img src="${url}" alt="${item.name || "token"}" />`
         : `<span class="placeholder">no image</span>`;
-      tokenNameEl.textContent = item.name || "(unnamed)";
-      tokenNameEl.classList.add("linked");
+      tokenLabelInput.disabled = false;
+      tokenLabelInput.placeholder = "Edit text";
+      if (document.activeElement !== tokenLabelInput) {
+        tokenLabelInput.value = tokenLabelText(item);
+      }
     } else {
       tokenImgBox.innerHTML = `<span class="placeholder">no token</span>`;
-      tokenNameEl.textContent = "—";
-      tokenNameEl.classList.remove("linked");
+      tokenLabelInput.value = "";
+      tokenLabelInput.disabled = true;
+      tokenLabelInput.placeholder = "—";
+    }
+  }
+
+  // Writes the edited label back to the bound token. Both text
+  // representations are kept in step so it displays correctly whichever
+  // one the token is currently using. A token without a text object at all
+  // is left alone rather than having one fabricated with a guessed shape.
+  async function commitTokenLabel() {
+    if (!obr || !boundItemId) return;
+    const newText = tokenLabelInput.value;
+    try {
+      await obr.scene.items.updateItems([boundItemId], (items) => {
+        for (const item of items) {
+          if (!item.text) continue;
+          item.text.plainText = newText;
+          item.text.richText = [{ type: "paragraph", children: [{ text: newText }] }];
+          if (!item.text.type) item.text.type = "PLAIN";
+        }
+      });
+    } catch (e) {
+      statusEl.textContent = "Couldn't change this token's label — you may not have permission to edit it.";
+      statusEl.classList.add("warn");
+      const [item] = await obr.scene.items.getItems([boundItemId]);
+      if (item) tokenLabelInput.value = tokenLabelText(item);
+    }
+  }
+  tokenLabelInput.addEventListener("change", commitTokenLabel);
+  tokenLabelInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") tokenLabelInput.blur();
+  });
+
+  // Keeps the label box in step when the token's text is changed from
+  // outside this panel (Owlbear's own Edit text, or another player).
+  function onItemsChanged(items) {
+    if (!boundItemId || !Array.isArray(items)) return;
+    const item = items.find(i => i.id === boundItemId);
+    if (!item) return;
+    const label = tokenLabelText(item);
+    if (document.activeElement !== tokenLabelInput && tokenLabelInput.value !== label) {
+      tokenLabelInput.value = label;
     }
   }
 
@@ -2297,6 +2373,7 @@
     obr.onReady(async () => {
       await refreshSelection();
       obr.player.onChange(refreshSelection);
+      try { obr.scene.items.onChange(onItemsChanged); } catch (e) { /* scene not ready; label just won't live-update */ }
     });
   }
 
